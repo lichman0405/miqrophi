@@ -48,6 +48,92 @@ _CIF_KEYS = {
     ),
 }
 
+# Space-group parsing — used by BFDH systematic-absence filter
+_SG_SYMBOL_PAT = re.compile(
+    r"(?:_symmetry_space_group_name_H-M|_space_group_name_H-M_alt)"
+    r"\s+['\"]?\s*([A-Za-z])",
+    re.IGNORECASE,
+)
+_SG_NUMBER_PAT = re.compile(
+    r"(?:_symmetry_Int_Tables_number|_space_group_IT_number)\s+(\d+)",
+    re.IGNORECASE,
+)
+
+# Space-group number → lattice-centering type.  Only non-P entries listed;
+# everything else defaults to 'P'.
+_SG_LATTICE: dict[int, str] = {
+    # C-centred monoclinic
+    **{n: "C" for n in [5, 8, 9, 12, 13, 14, 15]},
+    # C/A orthorhombic
+    **{n: "C" for n in [20, 21, 35, 36, 37, 63, 64, 65, 66, 67, 68]},
+    **{n: "A" for n in [38, 39, 40, 41]},
+    # I orthorhombic
+    **{n: "I" for n in [23, 24, 44, 45, 46, 71, 72, 73, 74]},
+    # F orthorhombic
+    **{n: "F" for n in [22, 42, 43, 69, 70]},
+    # I tetragonal
+    **{n: "I" for n in [79, 80, 82, 87, 88, 97, 98,
+                         107, 108, 109, 110, 119, 120, 121, 122,
+                         139, 140, 141, 142]},
+    # R trigonal (hexagonal setting)
+    **{n: "R" for n in [146, 148, 155, 160, 161, 166, 167]},
+    # I cubic
+    **{n: "I" for n in [197, 199, 204, 206, 211, 214, 217, 220, 229, 230]},
+    # F cubic
+    **{n: "F" for n in [196, 202, 203, 209, 210, 216, 225, 226, 227, 228]},
+}
+
+
+def _lattice_type(cif_text: str) -> str:
+    """
+    Extract the lattice-centering type (P, I, F, A, B, C, R) from CIF text.
+
+    First tries the Hermann–Mauguin symbol (first character); falls back to
+    the space-group number; returns ``'P'`` if neither is present.
+    """
+    m = _SG_SYMBOL_PAT.search(cif_text)
+    if m:
+        lt = m.group(1).upper()
+        if lt in {"P", "I", "F", "A", "B", "C", "R", "H"}:
+            return lt
+    m = _SG_NUMBER_PAT.search(cif_text)
+    if m:
+        return _SG_LATTICE.get(int(m.group(1)), "P")
+    return "P"
+
+
+def _is_allowed(h: int, k: int, l: int, lattice_type: str) -> bool:
+    """
+    Return True if the reflection (h, k, l) is systematically allowed for
+    the given lattice-centering type.
+
+    Rules applied (general conditions from ITA):
+    * P — all allowed
+    * I — h+k+l = 2n
+    * F — h, k, l all odd or all even (unmixed parities)
+    * A — k+l = 2n
+    * B — h+l = 2n
+    * C — h+k = 2n
+    * R — −h+k+l = 3n  (hexagonal setting, obverse)
+    """
+    lt = lattice_type.upper()
+    if lt == "P":
+        return True
+    if lt == "I":
+        return (h + k + l) % 2 == 0
+    if lt == "F":
+        parities = {h % 2, k % 2, l % 2}
+        return len(parities) == 1          # all same parity
+    if lt == "A":
+        return (k + l) % 2 == 0
+    if lt == "B":
+        return (h + l) % 2 == 0
+    if lt == "C":
+        return (h + k) % 2 == 0
+    if lt == "R":
+        return (-h + k + l) % 3 == 0
+    return True                            # H or unknown: allow all
+
 
 def _parse_cell(cif_text: str) -> dict[str, float | str]:
     """
@@ -299,12 +385,13 @@ def bfdh_faces(
 
         d_hkl = 2π / |G_hkl|    where G_hkl = h·b1 + k·b2 + l·b3
 
-    **Note on systematic absences**: this implementation does *not* apply
-    systematic extinction rules (which depend on the space group).  For
-    P1 structures (typical of PACMAN-processed MOF CIFs) this is exact.
-    For higher-symmetry crystals some listed faces may be systematically
-    absent; the returned d_hkl values remain correct for face ranking even
-    without this correction.
+    **Note on systematic absences**: lattice-centering extinction rules are
+    applied automatically.  The space group is read from the CIF
+    (``_symmetry_space_group_name_H-M`` or ``_symmetry_Int_Tables_number``);
+    if absent the structure is assumed primitive (P).  Screw-axis and
+    glide-plane extinctions (which depend on zone-specific conditions) are
+    *not* applied — for BFDH morphology prediction the centering condition
+    alone provides a large improvement over the uncorrected list.
 
     Parameters
     ----------
@@ -323,6 +410,9 @@ def bfdh_faces(
     [((0, 0, 1), 26.34), ((0, 1, 0), 26.31), ((1, 0, 0), 26.27)]
     """
     cell = read_cell(cif_path)
+    cif_text = Path(cif_path).read_text(encoding="utf-8", errors="replace")
+    lat_type = _lattice_type(cif_text)
+
     A3   = _cartesian_matrix(
         float(cell["a"]), float(cell["b"]), float(cell["c"]),
         float(cell["alpha"]), float(cell["beta"]), float(cell["gamma"]),
@@ -336,6 +426,8 @@ def bfdh_faces(
                 if h == 0 and k == 0 and l == 0:
                     continue
                 if not _canonical_hkl(h, k, l):
+                    continue
+                if not _is_allowed(h, k, l, lat_type):
                     continue
                 G   = h * B3[0] + k * B3[1] + l * B3[2]
                 Gn  = float(np.linalg.norm(G))
