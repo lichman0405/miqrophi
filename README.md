@@ -41,24 +41,46 @@ pip install -e .
 
 ## Quick Start
 
-### Option A — from a CIF file (recommended)
+### Option A — automatic face selection from CIF (recommended)
+
+```python
+from miqrocal import best_surface_lattice, EpitaxyMatcher, SUBSTRATE_DB, generate_pdf_report
+from miqrocal import level1, level2
+
+# Let BFDH rule pick the most prominent face automatically
+results = best_surface_lattice("examples/0000[Co][sql]2[ASR]2.cif", n_faces=3)
+hkl, d_hkl, lat_mof = results[0]   # largest d_hkl → most likely exposed face
+print(hkl, f"d={d_hkl:.2f} Å")    # -> (0,0,1)  d=10.62 Å
+
+# Run matching against all substrates and find the best one
+from miqrocal import EpitaxyMatcher, MatcherConfig, SUBSTRATE_DB
+cfg     = MatcherConfig(sigma=0.4, eta_tol=0.05)
+matcher = EpitaxyMatcher(cfg)
+
+best_eta, best_key, best_df = 1.0, None, None
+for key, lat_sub in SUBSTRATE_DB.items():
+    df = matcher.run(lat_sub, lat_mof, verbose=False)
+    if df is not None and df["eta"].iloc[0] < best_eta:
+        best_eta, best_key, best_df = df["eta"].iloc[0], key, df
+print(f"Best substrate: {best_key}  η={best_eta:.4f}")
+```
+
+### Option B — from a specific CIF face
 
 ```python
 from miqrocal import EpitaxyMatcher, MatcherConfig, SUBSTRATE_DB
 from miqrocal.cif_parser import surface_lattice
 
-# Extract the MOF surface lattice from a CIF (cell parameters only required)
 lat_mof = surface_lattice("examples/HKUST-1.cif", hkl=(0, 0, 1))
-# -> Lattice2D(a=26.343, b=26.343, gamma_deg=90.0, label='... (001)')
+# -> Lattice2D(a=26.343, b=26.343, gamma_deg=90.0)
 
-# Run against Au(100)
 cfg     = MatcherConfig(sigma=0.4, eta_tol=0.04)
 matcher = EpitaxyMatcher(cfg)
 df      = matcher.run(lat_sub=SUBSTRATE_DB["Au_100"], lat_mof=lat_mof)
 print(df)
 ```
 
-### Option B — from known lattice parameters
+### Option C — from known lattice parameters
 
 ```python
 from miqrocal import EpitaxyMatcher, MatcherConfig, Lattice2D, SUBSTRATE_DB
@@ -78,7 +100,21 @@ Sample output:
        90.00 0.020169 0.01426 0.01426     0.0     1348.4         True
 ```
 
-Run the bundled demonstration (saves PNG figures to `output/`):
+### Generating a PDF report
+
+```python
+from miqrocal import generate_pdf_report
+# (obtain l1 and sorted matches via level1.compute / level2.find_matches)
+generate_pdf_report(lat_sub, lat_mof, l1, matches,
+                    title="HKUST-1 / Au(100)",
+                    save_path="output/report.pdf")
+```
+
+The PDF contains two pages: a text summary table (lattice params + ranked
+matches) and the 2×2 match-card figure.  No external dependencies beyond
+matplotlib are required.
+
+Run the bundled demonstration (saves PNG + PDF to `output/`):
 
 ```bash
 python run.py
@@ -114,12 +150,17 @@ Pre-defined substrate lattices (bulk-truncated, ideal surfaces):
 
 | Key | Description | a (Å) | γ (°) |
 |-----|-------------|--------|--------|
-| `"Graphene"` | Graphene (1×1) | 2.46 | 120 |
-| `"Au_111"` | Au(111) | 2.88 | 120 |
-| `"Au_100"` | Au(100) | 4.08 | 90 |
-| `"ITO_111"` | ITO(111) equivalent | 4.13 | 120 |
-| `"Cu_111"` | Cu(111) | 2.56 | 120 |
-| `"Ag_111"` | Ag(111) | 2.89 | 120 |
+| `"Au_111"` | Au(111) | 2.880 | 120 |
+| `"Au_100"` | Au(100) | 4.080 | 90 |
+| `"Ag_111"` | Ag(111) | 2.890 | 120 |
+| `"Cu_111"` | Cu(111) | 2.560 | 120 |
+| `"Pt_111"` | Pt(111) | 2.775 | 120 |
+| `"Graphene"` | Graphene (1×1) | 2.460 | 120 |
+| `"HOPG"` | HOPG(0001) | 2.460 | 120 |
+| `"ITO_111"` | ITO(111) | 4.130 | 120 |
+| `"MgO_001"` | MgO(001) | 4.211 | 90 |
+| `"SrTiO3_001"` | SrTiO₃(001) | 3.905 | 90 |
+| `"Si_001"` | Si(001) | 5.431 | 90 |
 
 ### `MatcherConfig`
 
@@ -217,8 +258,9 @@ df = EpitaxyMatcher().run(my_substrate, my_mof)
 The current implementation covers **geometric commensurability only**.
 A complete epitaxial feasibility assessment additionally requires:
 
-1. **Surface termination**: which crystal face is exposed is determined by
-   surface formation energies (DFT or BFDH rule); not computed here.
+1. **Surface termination**: which crystal face is exposed is approximated here
+   by the BFDH rule (`best_surface_lattice()`); DFT surface-energy calculations
+   are needed for definitive assignments.
 2. **Surface reconstruction**: real substrates (e.g. Au(111) 22×√3) differ
    from bulk-truncated parameters in `SUBSTRATE_DB`.
 3. **Chemical compatibility**: geometric matching does not guarantee chemical
@@ -239,6 +281,7 @@ so they can be embedded in custom figures.
 | `plot_leed_pattern(lat_sub, lat_mof, match)` | C | Simulated LEED: substrate (blue), MOF (red), superstructure spots (green ★) |
 | `plot_strain_ellipse(match)` | D | Unit circle vs. deformed ellipse, principal-strain arrows, ε component table |
 | `plot_match_card(lat_sub, lat_mof, l1, match)` | E | 2×2 figure combining all four panels |
+| `generate_pdf_report(lat_sub, lat_mof, l1, matches)` | — | Two-page PDF: text summary (p.1) + match-card figure (p.2) |
 
 ### Quick usage
 
