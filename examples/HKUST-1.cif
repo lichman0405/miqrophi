@@ -1,0 +1,50 @@
+#------------------------------------------------------------------------------
+# HKUST-1  (Cu-BTC, MOF-199)
+# Cu3(BTC)2  where BTC = 1,3,5-benzenetricarboxylate
+#
+# Reference:
+#   Chui, S.S.-Y.; Lo, S.M.-F.; Charmant, J.P.H.; Orpen, A.G.; Williams, I.D.
+#   "A Chemically Functionalizable Nanoporous Material [Cu3(TMA)2(H2O)3]n"
+#   Science 1999, 283, 1148-1150.  DOI: 10.1126/science.283.5405.1148
+#
+# This file contains only the unit-cell block (no fractional coordinates)
+# and is sufficient for miqrocal surface-lattice extraction.
+# For full structural details see the Cambridge Structural Database
+# entry FIQCEN or COD entry 7105891.
+#------------------------------------------------------------------------------
+
+data_HKUST-1
+
+_cell_length_a                   26.343
+_cell_length_b                   26.343
+_cell_length_c                   26.343
+_cell_angle_alpha                90.000
+_cell_angle_beta                 90.000
+_cell_angle_gamma                90.000
+_cell_volume                     18293.8
+_cell_formula_units_Z            16
+
+_symmetry_space_group_name_H-M   'F m -3 m'
+_symmetry_space_group_name_Hall  '-F 4 2 3'
+_symmetry_Int_Tables_number      225
+
+_chemical_formula_sum            'C18 H12 Cu3 O15'
+_chemical_formula_weight         689.04
+_chemical_name_common            'HKUST-1'
+_chemical_name_systematic
+;
+ poly[triaqua(mu6-benzene-1,3,5-tricarboxylato)dicopper(II)]
+;
+
+# Fractional coordinates are omitted in this minimal CIF.
+# This file is provided for miqrocal surface-lattice extraction only.
+# The surface unit cell for common exposed facets is:
+#
+#   (001) : a = b = 26.343 Ang,  gamma = 90 deg   (square,      p4mm)
+#   (011) : a = 26.343 Ang, b = 37.255 Ang, gamma = 90 deg  (rectangular)
+#   (111) : a = b = 37.255 Ang, gamma = 60 deg    (hexagonal,   p6mm)
+#
+# For the FCC primitive description (a_prim = a/sqrt(2) = 18.627 Ang):
+#   (010) surface in primitive setting: a = b = 18.627 Ang, gamma = 90 deg
+#
+# Calculated by miqrocal.cif_parser.surface_lattice(hkl=(...)).
