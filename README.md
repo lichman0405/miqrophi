@@ -4,14 +4,27 @@
 between MOF (metal-organic framework) thin films and crystalline substrates
 using a three-level hierarchical lattice-matching algorithm.
 
-Unlike classical brute-force supercell enumeration (Zur & McGill 1984), which
-scales as O(N_m² · N_s²), miqrocal replaces exhaustive search with:
+MOF thin-film epitaxy has emerged as a route to integrate porous, functional
+materials with device-grade substrates \[1, 2\].  Identifying epitaxia-compatible
+substrate–overlayer pairs is the first bottleneck in any growth campaign.
 
-| Level | Method | Cost |
-|-------|--------|------|
-| 0 | Quadratic-form discriminant check (algebraic symmetry prohibition) | O(1) |
-| 1 | Reciprocal-space coincidence function Φ(θ) via Fourier analysis | O(N_G² + K log K) |
-| 2 | Floating-point LLL lattice reduction → Green–Lagrange strain tensor | O(d⁴ log B) |
+The classical approach to this problem is the brute-force supercell enumeration
+introduced by **Zur & McGill (1984)** \[3\], which iterates over all integer
+matrix pairs (M, N) and scales as O(N_m² · N_s²).  miqrocal replaces that
+exhaustive search with a three-level hierarchy:
+
+| Level | Method | Key reference | Cost |
+|-------|--------|---------------|------|
+| 0 | Quadratic-form discriminant check | Number theory (classical) | O(1) |
+| 1 | Reciprocal-space coincidence function Φ(θ) via Jacobi–Anger expansion \[4\] | Watson 1944 \[5\] | O(N_G² + K log K) |
+| 2 | Floating-point LLL lattice reduction \[6\] → Green–Lagrange strain tensor | Lenstra, Lenstra & Lovász 1982 | O(d⁴ log B) |
+
+Surface-exposure probabilities are estimated using the **BFDH morphological
+rule** \[7\] (Donnay & Harker 1937), which ranks faces by interplanar spacing
+$d_{hkl}$ without requiring a force-field calculation.
+
+The benchmark example CIF for HKUST-1 is based on the crystal structure first
+reported by **Chui et al. (1999)** \[8\].
 
 For a complete mathematical and physicochemical derivation see
 [`docs/lattice_matching_theory.md`](docs/lattice_matching_theory.md).
@@ -327,6 +340,60 @@ pyproject.toml     package metadata
 CHANGELOG.md       version history
 LICENSE            MIT license
 ```
+
+---
+
+## References
+
+We gratefully acknowledge the foundational works upon which miqrocal is built:
+
+\[1\] I. Stassen, N. Burtch, A. Talin, P. Falcaro, M. Allendorf, and R. Ameloot,
+"An updated roadmap for the integration of metal–organic frameworks with
+electronic devices and chemical sensors,"
+*Chem. Soc. Rev.* **46**, 3185–3241 (2017).
+https://doi.org/10.1039/C7CS00122C
+
+\[2\] O. Shekhah, J. Liu, R. A. Fischer, and C. Wöll,
+"MOF thin films: existing and future applications,"
+*Chem. Soc. Rev.* **40**, 1081–1106 (2011).
+https://doi.org/10.1039/C0CS00147C
+
+\[3\] A. Zur and T. C. McGill,
+"Lattice match: An application to heteroepitaxy,"
+*J. Appl. Phys.* **55**, 378–386 (1984).
+https://doi.org/10.1063/1.333084
+— *The seminal brute-force supercell enumeration method that miqrocal supersedes.*
+
+\[4\] The Jacobi–Anger expansion  $e^{z\cos\varphi} = \sum_n I_n(z)\,e^{in\varphi}$
+converts the two-dimensional coincidence integral into an efficiently
+evaluable Fourier series; $I_n$ are modified Bessel functions of the first kind.
+
+\[5\] G. N. Watson,
+*A Treatise on the Theory of Bessel Functions*, 2nd ed.,
+Cambridge University Press (1944), §2.22.
+— *Standard reference for Bessel-function identities used in Level 1.*
+
+\[6\] A. K. Lenstra, H. W. Lenstra Jr., and L. Lovász,
+"Factoring polynomials with rational coefficients,"
+*Math. Ann.* **261**, 515–534 (1982).
+https://doi.org/10.1007/BF01457454
+— *The LLL algorithm: guarantees a near-shortest basis in polynomial time.
+  miqrocal uses this to find the optimal integer supercell matrix pair (M, N)
+  without exhaustive enumeration.*
+
+\[7\] J. D. H. Donnay and D. Harker,
+"A new law of crystal morphology extending the law of Bravais,"
+*Am. Mineral.* **22**, 446–467 (1937).
+— *The Donnay–Harker extension of the Bravais–Friedel morphological rule;
+  the basis of the BFDH face-ranking used in `bfdh_faces()` and
+  `best_surface_lattice()`.*
+
+\[8\] S. S.-Y. Chui, S. M.-F. Lo, J. P. H. Charmant, A. G. Orpen, and I. D. Williams,
+"A Chemically Functionalizable Nanoporous Material [Cu₃(TMA)₂(H₂O)₃]ₙ,"
+*Science* **283**, 1148–1150 (1999).
+https://doi.org/10.1126/science.283.5405.1148
+— *First report of HKUST-1 (MOF-199); crystal structure used in
+  `examples/HKUST-1.cif`.*
 
 ---
 
