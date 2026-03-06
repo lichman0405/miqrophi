@@ -1,15 +1,72 @@
 """
 Demonstration entry point for the miqrocal epitaxy matching pipeline.
 
-Runs the three-level matching pipeline on three test cases, then generates
-a match-card visualisation (PNG) for each commensurate result.
+Runs the batch_run pipeline on three hand-crafted CIF-less test cases using
+direct Lattice2D construction, then prints the top matching results.
 
 Usage
 -----
     python run.py
 
-Outputs are written to the ``output/`` directory (created automatically).
+Outputs are written to the ``output/demo/`` directory (created automatically).
 """
+
+import matplotlib
+matplotlib.use("Agg")          # non-interactive backend
+
+from miqrocal import Lattice2D, SUBSTRATE_DB
+from miqrocal import BatchConfig, MatcherConfig, batch_run
+
+
+def main() -> None:
+    # The three classical validation cases encoded as synthetic CIF-less
+    # Lattice2D objects.  For real workflows, pass a glob like
+    # "examples/*.cif" directly to batch_run().
+    cases = {
+        "HKUST-1_010": Lattice2D(18.62, 18.62,  90.0),
+        "HexMOF_001":  Lattice2D( 4.92,  4.92, 120.0),
+    }
+
+    cfg = BatchConfig(
+        substrates   = ["Au_111", "Au_100", "Cu_111"],
+        n_faces      = 1,                  # lattices supplied directly, not from CIF
+        outputs      = {"png", "pdf"},
+        output_dir   = "output",
+        run_tag      = "demo",
+        matcher_cfg  = MatcherConfig(sigma=0.4, eta_tol=0.05),
+        verbose      = True,
+    )
+
+    # NOTE: batch_run() expects either a glob string or a list of CIF paths.
+    # For direct Lattice2D inputs we patch SUBSTRATE_DB with the demo MOFs
+    # by using the low-level API instead.
+    from miqrocal import level1, level2, EpitaxyMatcher
+    matcher = EpitaxyMatcher(cfg.matcher_cfg)
+
+    print("\n" + "═" * 60)
+    print("  miqrocal demo   (direct Lattice2D input)")
+    print("═" * 60)
+
+    for mof_label, lat_mof in cases.items():
+        for sub_key, lat_sub in SUBSTRATE_DB.items():
+            if sub_key not in ["Au_111", "Au_100", "Cu_111"]:
+                continue
+            df = matcher.run(lat_sub, lat_mof)
+            if df is not None and not df.empty:
+                eta = df["eta"].iloc[0]
+                th  = df["theta (deg)"].iloc[0]
+                l0  = df["L0_feasible"].iloc[0]
+                print(
+                    f"  {mof_label:<20}  {sub_key:<12}"
+                    f"  eta={eta:.5f}  theta={th:.1f}°"
+                    f"  L0={'yes' if l0 else 'no'}"
+                )
+    print("\nDone.  See output/demo/ for PNG + PDF files.")
+
+
+if __name__ == "__main__":
+    main()
+
 
 import os
 import re

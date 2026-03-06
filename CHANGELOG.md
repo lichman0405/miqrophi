@@ -52,15 +52,69 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.0] — 2026-03-06
+
+### Added
+
+- **Screw-axis / glide-plane extinctions** (`cif_parser.py`): `_SG_ZONE_CONDS`
+  dictionary (ITA Vol A, Table 2.2.13) covers ~55 of the most common MOF space
+  groups (P2₁/c SG†14, P2₁2₁2₁ SG†19, Pnma SG†62, Pbca SG†61, Fd-3m SG†227,
+  Ia-3d SG†230, etc.).  Zone-specific helper functions `_sg_number`,
+  `_in_zone`, `_rule_ok`, `_is_zone_allowed` integrated into `bfdh_faces()`.
+- **Parallel batch processing** (`batch.py`): `BatchConfig.n_jobs` parameter;
+  `1` = serial (default), `-1` = all CPUs, `N > 1` = N workers via
+  `concurrent.futures.ProcessPoolExecutor`.  Single-CIF logic extracted to
+  `_run_single_cif()` plus module-level picklable `_worker()` function.
+- **Command-line interface** (`miqrocal/cli.py`): `miqrocal substrates`,
+  `miqrocal run FILE ...`, `miqrocal batch "glob/**/*.cif"` sub-commands;
+  supports `--substrates`, `--n-faces`, `--output-dir`, `--tag`, `--n-jobs`,
+  `--outputs`, `--eta-tol`, `--sigma`, `--quiet`.
+- **Test suite** (`tests/`): 4 test modules covering
+  `Lattice2D`/`SUBSTRATE_DB`, Level-0 discriminant, CIF centering + screw/glide
+  zone conditions, and `batch_run` (serial vs parallel row-count equality).
+- **`__version__ = "0.3.0"`** added to `miqrocal/__init__.py`.
+- `run.py` simplified to use `EpitaxyMatcher` directly with `Lattice2D` inputs
+  (no CIF required for the demo).
+
+### Changed
+
+- `bfdh_faces()` docstring updated to reflect that screw/glide extinctions are
+  now applied in addition to centering conditions.
+- `pyproject.toml`: repository URL corrected to `lichman0405/miqrophi`;
+  `[project.scripts]` entry point `miqrocal = "miqrocal.cli:main"` added;
+  version bumped to 0.3.0.
+- `README.md`: clone URL corrected; File Structure section updated to include
+  `batch.py`, `cli.py`, `tests/`.
+
+---
+
+## [0.2.0] — 2026-03-06
+
+### Added
+
+- **`batch_run()` / `BatchConfig`** (`batch.py`): single-call batch pipeline
+  that screens a glob of CIF files against multiple substrates and writes
+  per-pair match-card PNG, PDF report, and a summary CSV with traceable paths.
+- **BFDH face selection with centering extinctions** (`cif_parser.py`):
+  `bfdh_faces()` and `best_surface_lattice()` now apply F/I/A/B/C/R
+  lattice-centering systematic-absence rules when ranking faces.
+- **`SUBSTRATE_DB` expanded** to 11 entries: Au(111), Au(100), Ag(111),
+  Cu(111), Pt(111), Graphene, HOPG(0001), ITO(111), MgO(001),
+  SrTiO₃(001), Si(001).
+- **PDF report** (`visualize.py`): `generate_pdf_report()` writes a two-page
+  PDF (ranked match table + match-card figure) with no external dependencies
+  beyond matplotlib.
+- `README.md` extended with Quick Start sections B/C, API tables, worked
+  examples, and visualisation function reference.
+
+---
+
 ## [Unreleased]
 
 ### Planned
 
-- CIF file parser to extract 2D surface lattice parameters from 3D crystal
-  structures given a Miller index (hkl)
 - Julia rewrite of Level 1 and Level 2 hot paths for high-throughput
   screening (no GIL, native multi-threading)
-- `batch_run()` method in `EpitaxyMatcher` for screening many MOF/substrate
-  pairs with optional multiprocessing
 - Surface reconstruction database (Au(111) 22×√3, Au(100) 5×20, etc.)
-- Visualisation: Φ(θ) curve plot and coincidence lattice overlay diagram
+- DFT surface-energy weighting to replace the BFDH approximation
+- GUI / Jupyter widget for interactive face selection and result inspection

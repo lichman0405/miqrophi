@@ -45,8 +45,8 @@ No compiled extensions required.
 ## Installation
 
 ```bash
-git clone https://github.com/yourname/miqrocal.git
-cd miqrocal
+git clone https://github.com/lichman0405/miqrophi.git
+cd miqrophi
 pip install -e .
 ```
 
@@ -325,16 +325,23 @@ directory for all three demo cases.
 
 ```
 miqrocal/
-  __init__.py      public API
+  __init__.py      public API  (__version__)
   lattice.py       Lattice2D dataclass and SUBSTRATE_DB
   level0.py        quadratic-form discriminant check
   level1.py        reciprocal-space coincidence function Phi(theta)
   level2.py        LLL lattice reduction and Green-Lagrange strain tensor
   matcher.py       EpitaxyMatcher pipeline and MatcherConfig
+  batch.py         BatchConfig, batch_run (serial + parallel)
+  cli.py           miqrocal CLI entry point
   visualize.py     five plotting functions (Plans A-E)
+tests/
+  test_lattice.py  unit tests for Lattice2D and SUBSTRATE_DB
+  test_level0.py   unit tests for Level-0 algebraic check
+  test_cif_parser.py  tests for centering/screw-glide extinctions
+  test_batch.py    tests for batch_run (serial + parallel)
 docs/
   lattice_matching_theory.md   full mathematical derivation
-output/            generated figures (created by run.py)
+output/            generated figures (created at runtime)
 run.py             demonstration entry point
 pyproject.toml     package metadata
 CHANGELOG.md       version history

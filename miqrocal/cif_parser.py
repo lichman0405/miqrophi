@@ -135,6 +135,147 @@ def _is_allowed(h: int, k: int, l: int, lattice_type: str) -> bool:
     return True                            # H or unknown: allow all
 
 
+def _sg_number(cif_text: str) -> int:
+    """Return the ITA space-group number parsed from CIF, or 0 if absent."""
+    m = _SG_NUMBER_PAT.search(cif_text)
+    return int(m.group(1)) if m else 0
+
+
+# Zone-specific systematic absences: screw axes and glide planes.
+# Format per space-group number:  list of (zone, selection_rule) string pairs.
+#
+# zone  ∈ {"0kl","h0l","hk0","h00","0k0","00l","hhl","hhh"}
+# rule  ∈ {"h=2n","k=2n","l=2n","h+k=2n","h+l=2n","k+l=2n",
+#          "h=4n","k=4n","l=4n","h+k=4n","h+l=4n","k+l=4n"}
+#
+# Sources: ITA Volume A (2016), Table 2.2.13.  Only non-trivial entries
+# listed; SGs with no screw/glide extinctions beyond centering are omitted.
+_SG_ZONE_CONDS: dict[int, list[tuple[str, str]]] = {
+    # ── Monoclinic (unique axis b) ─────────────────────────────────────────
+    4:  [("0k0", "k=2n")],                                    # P 2_1
+    7:  [("h0l", "l=2n")],                                    # P c
+    9:  [("h0l", "l=2n")],                                    # C c  (+ C centering)
+    11: [("0k0", "k=2n")],                                    # P 2_1/m
+    14: [("0k0", "k=2n"), ("h0l", "l=2n")],                   # P 2_1/c  ★ most common
+    15: [("h0l", "l=2n")],                                    # C 2/c  (+ C centering)
+    # ── Orthorhombic ──────────────────────────────────────────────────────
+    17: [("h00", "h=2n"), ("0k0", "k=2n")],                   # P 2 2 2_1
+    18: [("h00", "h=2n"), ("0k0", "k=2n")],                   # P 2_1 2_1 2
+    19: [("h00", "h=2n"), ("0k0", "k=2n"), ("00l", "l=2n")],  # P 2_1 2_1 2_1  ★
+    29: [("h0l", "l=2n"), ("hk0", "h=2n"), ("h00", "h=2n")],  # P c a 2_1
+    33: [("0kl", "k+l=2n"), ("h0l", "h=2n"), ("00l", "l=2n")], # P n a 2_1
+    36: [("0kl", "k=2n"), ("00l", "l=2n")],                   # C m c 2_1  (+ C)
+    60: [("0kl", "k=2n"),    ("h0l",  "l=2n"),                # P b c n
+         ("hk0", "h+k=2n"), ("h00",  "h=2n"),
+         ("0k0", "k=2n"),    ("00l",  "l=2n")],
+    61: [("0kl", "l=2n"),    ("h0l",  "h=2n"),                # P b c a  ★
+         ("hk0", "k=2n"),    ("h00",  "h=2n"),
+         ("0k0", "k=2n"),    ("00l",  "l=2n")],
+    62: [("0kl", "k+l=2n"),  ("hk0",  "h=2n"),                # P n m a  ★
+         ("h00", "h=2n"),    ("0k0",  "k=2n")],
+    63: [("0kl", "k=2n"),    ("h0l",  "l=2n"), ("00l", "l=2n")],  # C m c m (+ C)
+    64: [("0kl", "k=2n"),    ("h0l",  "l=2n"), ("00l", "l=2n")],  # C m c e (+ C)
+    # ── Tetragonal ────────────────────────────────────────────────────────
+    76: [("00l", "l=4n")],                                    # P 4_1
+    77: [("00l", "l=2n")],                                    # P 4_2
+    78: [("00l", "l=4n")],                                    # P 4_3
+    80: [("00l", "l=4n")],                                    # I 4_1  (+ I)
+    84: [("00l", "l=2n")],                                    # P 4_2/m
+    86: [("hk0", "h+k=2n"), ("h00", "h=2n"),                  # P 4_2/n
+         ("0k0", "k=2n"),   ("00l", "l=2n")],
+    88: [("00l", "l=4n"),   ("0k0", "k=2n"), ("h00", "h=2n")],  # I 4_1/a (+ I)
+    92: [("h00", "h=2n"),   ("00l", "l=4n")],                 # P 4_1 2 2
+    96: [("h00", "h=2n"),   ("00l", "l=4n")],                 # P 4_3 2_1 2
+    # ── Trigonal / Hexagonal ──────────────────────────────────────────────
+    144: [("00l", "l=3n")],                                   # P 3_1
+    145: [("00l", "l=3n")],                                   # P 3_2
+    151: [("00l", "l=3n")],                                   # P 3_1 1 2
+    152: [("00l", "l=3n")],                                   # P 3_1 2 1
+    153: [("00l", "l=3n")],                                   # P 3_2 1 2
+    154: [("00l", "l=3n")],                                   # P 3_2 2 1
+    169: [("00l", "l=6n")],                                   # P 6_1
+    170: [("00l", "l=6n")],                                   # P 6_5
+    171: [("00l", "l=3n")],                                   # P 6_2
+    172: [("00l", "l=3n")],                                   # P 6_4
+    173: [("00l", "l=2n")],                                   # P 6_3
+    176: [("00l", "l=2n")],                                   # P 6_3/m
+    178: [("00l", "l=6n")],                                   # P 6_1 2 2
+    179: [("00l", "l=6n")],                                   # P 6_5 2 2
+    180: [("00l", "l=3n")],                                   # P 6_2 2 2
+    181: [("00l", "l=3n")],                                   # P 6_4 2 2
+    182: [("00l", "l=2n")],                                   # P 6_3 2 2
+    185: [("00l", "l=2n")],                                   # P 6_3 c m
+    186: [("00l", "l=2n")],                                   # P 6_3 m c
+    # ── Cubic ─────────────────────────────────────────────────────────────
+    198: [("h00", "h=2n"), ("0k0", "k=2n"), ("00l", "l=2n")],  # P 2_1 3
+    205: [("h0l", "h=2n"), ("h00", "h=2n"),                   # P a -3
+          ("0k0", "k=2n"), ("00l", "l=2n")],
+    212: [("h00", "h=4n"), ("hhh", "h=4n")],                  # P 4_3 3 2
+    213: [("h00", "h=4n"), ("hhh", "h=4n")],                  # P 4_1 3 2
+    214: [("h00", "h=4n"), ("hhh", "h=4n")],                  # I 4_1 3 2  (+ I)
+    220: [("h00", "h=4n")],                                   # I -4 3 d   (+ I)
+    227: [("0kl", "k+l=4n"), ("h0l", "h+l=4n"),              # F d -3 m   (+ F)
+          ("hk0", "h+k=4n"), ("h00", "h=4n"),
+          ("0k0", "k=4n"),   ("00l", "l=4n"),
+          ("hhh", "h=4n")],
+    228: [("0kl", "k+l=4n"), ("h0l", "h+l=4n"),              # F d -3 c   (+ F)
+          ("hk0", "h+k=4n"), ("h00", "h=4n"),
+          ("0k0", "k=4n"),   ("00l", "l=4n")],
+    230: [("0kl", "k+l=4n"), ("h0l", "h+l=4n"),              # I a -3 d   (+ I)
+          ("hk0", "h+k=4n"), ("h00", "h=4n"),
+          ("0k0", "k=4n"),   ("00l", "l=4n")],
+}
+
+
+def _in_zone(zone: str, h: int, k: int, l: int) -> bool:
+    """Return True if (h, k, l) lies in the given special zone."""
+    if zone == "0kl":  return h == 0
+    if zone == "h0l":  return k == 0
+    if zone == "hk0":  return l == 0
+    if zone == "h00":  return k == 0 and l == 0
+    if zone == "0k0":  return h == 0 and l == 0
+    if zone == "00l":  return h == 0 and k == 0
+    if zone == "hhl":  return h == k
+    if zone == "hhh":  return h == k == l
+    return False
+
+
+def _rule_ok(rule: str, h: int, k: int, l: int) -> bool:
+    """Return True if (h, k, l) satisfies the selection rule (reflection present)."""
+    if rule == "h=2n":    return h % 2 == 0
+    if rule == "k=2n":    return k % 2 == 0
+    if rule == "l=2n":    return l % 2 == 0
+    if rule == "h+k=2n":  return (h + k) % 2 == 0
+    if rule == "h+l=2n":  return (h + l) % 2 == 0
+    if rule == "k+l=2n":  return (k + l) % 2 == 0
+    if rule == "h=4n":    return h % 4 == 0
+    if rule == "k=4n":    return k % 4 == 0
+    if rule == "l=4n":    return l % 4 == 0
+    if rule == "h+k=4n":  return (h + k) % 4 == 0
+    if rule == "h+l=4n":  return (h + l) % 4 == 0
+    if rule == "k+l=4n":  return (k + l) % 4 == 0
+    return True   # unknown rule: conservatively allow
+
+
+def _is_zone_allowed(h: int, k: int, l: int, sg_num: int) -> bool:
+    """
+    Return True if (h, k, l) is allowed by the screw-axis and glide-plane
+    conditions of the given space-group number.
+
+    Only zone-specific conditions (affecting special hkl zones where one or
+    more indices are zero) are listed in :data:`_SG_ZONE_CONDS`.
+    General centering conditions are handled separately by :func:`_is_allowed`.
+
+    Space groups absent from :data:`_SG_ZONE_CONDS` have no extra zone
+    conditions (returns True for all such SGs, including P1, P-1, all
+    Pm-3m/Fm-3m/Im-3m and similar point-group-mirror-only entries).
+    """
+    for zone, rule in _SG_ZONE_CONDS.get(sg_num, []):
+        if _in_zone(zone, h, k, l) and not _rule_ok(rule, h, k, l):
+            return False
+    return True
+
+
 def _parse_cell(cif_text: str) -> dict[str, float | str]:
     """
     Extract cell parameters and optional compound name from CIF text.
@@ -385,13 +526,14 @@ def bfdh_faces(
 
         d_hkl = 2π / |G_hkl|    where G_hkl = h·b1 + k·b2 + l·b3
 
-    **Note on systematic absences**: lattice-centering extinction rules are
-    applied automatically.  The space group is read from the CIF
-    (``_symmetry_space_group_name_H-M`` or ``_symmetry_Int_Tables_number``);
-    if absent the structure is assumed primitive (P).  Screw-axis and
-    glide-plane extinctions (which depend on zone-specific conditions) are
-    *not* applied — for BFDH morphology prediction the centering condition
-    alone provides a large improvement over the uncorrected list.
+    **Note on systematic absences**: both lattice-centering and screw-axis /
+    glide-plane extinction rules are applied automatically.  The space group
+    is read from ``_symmetry_space_group_name_H-M`` (or the ITA number as
+    fallback); if absent the structure is treated as primitive (P).
+    Centering conditions (I/F/A/B/C/R) are applied to all reflections;
+    zone-specific screw/glide conditions are looked up in
+    :data:`_SG_ZONE_CONDS` which covers ~55 of the most common MOF space
+    groups (P2₁/c, P2₁2₁2₁, Pnma, Pbca, Fd-3m, etc.).
 
     Parameters
     ----------
@@ -413,6 +555,7 @@ def bfdh_faces(
     cell = read_cell(cif_path)
     cif_text = Path(cif_path).read_text(encoding="utf-8", errors="replace")
     lat_type = _lattice_type(cif_text)
+    sg_num   = _sg_number(cif_text)
 
     A3   = _cartesian_matrix(
         float(cell["a"]), float(cell["b"]), float(cell["c"]),
@@ -429,6 +572,8 @@ def bfdh_faces(
                 if not _canonical_hkl(h, k, l):
                     continue
                 if not _is_allowed(h, k, l, lat_type):
+                    continue
+                if not _is_zone_allowed(h, k, l, sg_num):
                     continue
                 G   = h * B3[0] + k * B3[1] + l * B3[2]
                 Gn  = float(np.linalg.norm(G))

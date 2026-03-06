@@ -58,6 +58,171 @@ def _safe(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Single-CIF worker (shared by serial and parallel paths)
+# ---------------------------------------------------------------------------
+
+def _run_single_cif(
+    cif_str: str,
+    subs: dict,
+    cfg: "BatchConfig",
+    mcfg: "MatcherConfig",
+    run_dir: Path,
+    log,
+) -> list[dict]:
+    """
+    Process one CIF file against all substrates and return a list of row dicts.
+    PNG/PDF files are written as side effects when enabled in *cfg*.
+
+    *log* is any callable that accepts a string; pass a no-op to suppress
+    progress output in parallel workers.
+    """
+    cif_path = Path(cif_str)
+    rows: list[dict] = []
+
+    try:
+        cell     = read_cell(cif_path)
+        mof_name = str(cell.get("name", cif_path.stem))
+    except Exception:
+        mof_name = cif_path.stem
+
+    log(f"\n  ┌─ {cif_path.name}  ({mof_name})")
+
+    try:
+        faces = best_surface_lattice(cif_path, n_faces=cfg.n_faces)
+    except Exception as exc:
+        log(f"  │  WARN: BFDH failed — {exc}")
+        return rows
+
+    for hkl, d_hkl, lat_mof in faces:
+        hkl_str = f"({','.join(str(x) for x in hkl)})"
+        log(f"  │  face {hkl_str}  d={d_hkl:.2f} Å  "
+            f"a={lat_mof.a:.2f} b={lat_mof.b:.2f} γ={lat_mof.gamma_deg:.1f}°")
+
+        hkl_compact = "".join(str(x) for x in hkl).replace("-", "m")
+        face_stem   = f"{_safe(cif_path.stem)}_{hkl_compact}"
+
+        for sub_key, lat_sub in subs.items():
+            row: dict = {
+                "cif_file":    cif_path.name,
+                "mof_name":    mof_name,
+                "hkl":         hkl_str,
+                "d_hkl_A":     round(d_hkl, 3),
+                "mof_a":       round(lat_mof.a, 3),
+                "mof_b":       round(lat_mof.b, 3),
+                "mof_gamma":   round(lat_mof.gamma_deg, 2),
+                "substrate":   sub_key,
+                "match_found": False,
+                "theta_deg":   float("nan"),
+                "eta":         float("nan"),
+                "eps_11":      float("nan"),
+                "eps_22":      float("nan"),
+                "eps_12":      float("nan"),
+                "area_A2":     float("nan"),
+                "L0_feasible": False,
+                "png_path":    "",
+                "pdf_path":    "",
+            }
+
+            try:
+                l1_res = _level1.compute(
+                    lat_sub, lat_mof,
+                    G_cutoff=mcfg.G_cutoff,
+                    sigma=mcfg.sigma,
+                )
+                all_matches: list[_level2.MatchResult] = []
+                for th in l1_res.theta_peaks[: mcfg.top_theta]:
+                    all_matches.extend(
+                        _level2.find_matches(
+                            lat_sub, lat_mof,
+                            theta_deg=th,
+                            lambda_values=mcfg.lambda_values,
+                            eta_tol=mcfg.eta_tol,
+                        )
+                    )
+                all_matches.sort(key=lambda m: m.eta)
+            except Exception as exc:
+                log(f"  │    {sub_key:16s}  ERROR: {exc}")
+                rows.append(row)
+                continue
+
+            if not all_matches:
+                log(f"  │    {sub_key:16s}  — no match  (η_tol={mcfg.eta_tol})")
+                rows.append(row)
+                continue
+
+            best = all_matches[0]
+            l0   = _level0.check(lat_sub, lat_mof)
+            row.update({
+                "match_found": True,
+                "theta_deg":   round(best.theta_deg, 2),
+                "eta":         round(best.eta, 6),
+                "eps_11":      round(best.strain[0, 0], 5),
+                "eps_22":      round(best.strain[1, 1], 5),
+                "eps_12":      round(best.strain[0, 1], 5),
+                "area_A2":     round(best.area, 1),
+                "L0_feasible": l0.feasible,
+            })
+
+            pair_dir = run_dir / f"{face_stem}__{sub_key}"
+            if cfg.outputs & {"png", "pdf"}:
+                pair_dir.mkdir(exist_ok=True)
+
+            if "png" in cfg.outputs:
+                png_path = pair_dir / "match_card.png"
+                try:
+                    fig = plot_match_card(
+                        lat_sub, lat_mof, l1_res, best,
+                        save_path=str(png_path), dpi=150,
+                    )
+                    plt.close(fig)
+                    row["png_path"] = str(png_path.relative_to(
+                        Path(cfg.output_dir).resolve()
+                    ))
+                except Exception as exc:
+                    log(f"  │    {sub_key:16s}  WARN PNG: {exc}")
+
+            if "pdf" in cfg.outputs:
+                pdf_path = pair_dir / "report.pdf"
+                try:
+                    generate_pdf_report(
+                        lat_sub, lat_mof, l1_res, all_matches,
+                        title=f"{mof_name} {hkl_str}  /  {sub_key}",
+                        save_path=str(pdf_path),
+                        top_n=cfg.top_n_report,
+                    )
+                    row["pdf_path"] = str(pdf_path.relative_to(
+                        Path(cfg.output_dir).resolve()
+                    ))
+                except Exception as exc:
+                    log(f"  │    {sub_key:16s}  WARN PDF: {exc}")
+
+            log(
+                f"  │    {sub_key:16s}  η={best.eta:.5f}"
+                f"  θ={best.theta_deg:.1f}°"
+                f"  L0={'✓' if l0.feasible else '✗'}"
+            )
+            rows.append(row)
+
+    log(f"  └─ done")
+    return rows
+
+
+def _worker(args: tuple) -> list[dict]:
+    """
+    Module-level worker for :class:`~concurrent.futures.ProcessPoolExecutor`.
+
+    Accepts a single tuple argument for compatibility with ``pool.map``.
+    Defined at module level so that it is picklable on all platforms
+    (spawn-based multiprocessing on Windows; fork on Linux/macOS).
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    cif_str, subs, cfg, mcfg, run_dir_str = args
+    _noop = lambda *a, **kw: None
+    return _run_single_cif(cif_str, subs, cfg, mcfg, Path(run_dir_str), _noop)
+
+
+# ---------------------------------------------------------------------------
 # BatchConfig
 # ---------------------------------------------------------------------------
 
@@ -83,6 +248,11 @@ class BatchConfig:
         ``None`` uses library defaults (σ=0.3, η_tol=0.05).
     top_n_report : number of match rows included in each PDF report (default 10).
     verbose : print per-pair progress to stdout (default True).
+    n_jobs : number of parallel workers.
+        ``1`` (default) runs serially; ``-1`` uses all available CPUs;
+        ``N > 1`` spawns N workers via :class:`~concurrent.futures.ProcessPoolExecutor`.
+        Each CIF is dispatched to one worker; results are collected in the
+        main process.  Verbose logging is suppressed in parallel mode.
     """
 
     substrates:   Optional[list[str]]     = None
@@ -95,6 +265,7 @@ class BatchConfig:
     matcher_cfg:  Optional[MatcherConfig]  = None
     top_n_report: int                      = 10
     verbose:      bool                     = True
+    n_jobs:       int                      = 1
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +339,12 @@ def batch_run(
     run_dir  = Path(cfg.output_dir) / dir_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    n_workers = (
+        0 if cfg.n_jobs == 1
+        else os.cpu_count() if cfg.n_jobs < 0
+        else min(cfg.n_jobs, len(paths))
+    )
+
     _log = print if cfg.verbose else (lambda *a, **kw: None)
     _log(f"\n{'═' * 62}")
     _log(f"  miqrocal batch_run")
@@ -176,143 +353,23 @@ def batch_run(
          f" {len(paths) * len(subs) * cfg.n_faces} pairs")
     _log(f"  Run directory: {run_dir.resolve()}")
     _log(f"  Outputs:       {sorted(cfg.outputs) or ['none (in-memory only)']}")
+    if n_workers:
+        _log(f"  Workers:       {n_workers}  (parallel, n_jobs={cfg.n_jobs})")
     _log(f"{'═' * 62}")
 
     rows: list[dict] = []
 
-    for cif in paths:
-        cif_path = Path(cif)
-        try:
-            cell     = read_cell(cif_path)
-            mof_name = str(cell.get("name", cif_path.stem))
-        except Exception:
-            mof_name = cif_path.stem
-
-        _log(f"\n  ┌─ {cif_path.name}  ({mof_name})")
-
-        try:
-            faces = best_surface_lattice(cif_path, n_faces=cfg.n_faces)
-        except Exception as exc:
-            _log(f"  │  WARN: BFDH failed — {exc}")
-            continue
-
-        for hkl, d_hkl, lat_mof in faces:
-            hkl_str = f"({','.join(str(x) for x in hkl)})"
-            _log(f"  │  face {hkl_str}  d={d_hkl:.2f} Å  "
-                 f"a={lat_mof.a:.2f} b={lat_mof.b:.2f} γ={lat_mof.gamma_deg:.1f}°")
-
-            # per-face sub-directory prefix (shared across substrates)
-            hkl_compact = "".join(str(x) for x in hkl).replace("-", "m")
-            face_stem   = f"{_safe(cif_path.stem)}_{hkl_compact}"
-
-            for sub_key, lat_sub in subs.items():
-
-                # default row — filled in regardless of match
-                row: dict = {
-                    "cif_file":    cif_path.name,
-                    "mof_name":    mof_name,
-                    "hkl":         hkl_str,
-                    "d_hkl_A":     round(d_hkl, 3),
-                    "mof_a":       round(lat_mof.a, 3),
-                    "mof_b":       round(lat_mof.b, 3),
-                    "mof_gamma":   round(lat_mof.gamma_deg, 2),
-                    "substrate":   sub_key,
-                    "match_found": False,
-                    "theta_deg":   float("nan"),
-                    "eta":         float("nan"),
-                    "eps_11":      float("nan"),
-                    "eps_22":      float("nan"),
-                    "eps_12":      float("nan"),
-                    "area_A2":     float("nan"),
-                    "L0_feasible": False,
-                    "png_path":    "",
-                    "pdf_path":    "",
-                }
-
-                # ── Level 1 + 2 (keep raw objects for visualisation) ────────
-                try:
-                    l1_res = _level1.compute(
-                        lat_sub, lat_mof,
-                        G_cutoff=mcfg.G_cutoff,
-                        sigma=mcfg.sigma,
-                    )
-                    all_matches: list[_level2.MatchResult] = []
-                    for th in l1_res.theta_peaks[: mcfg.top_theta]:
-                        all_matches.extend(
-                            _level2.find_matches(
-                                lat_sub, lat_mof,
-                                theta_deg=th,
-                                lambda_values=mcfg.lambda_values,
-                                eta_tol=mcfg.eta_tol,
-                            )
-                        )
-                    all_matches.sort(key=lambda m: m.eta)
-                except Exception as exc:
-                    _log(f"  │    {sub_key:16s}  ERROR: {exc}")
-                    rows.append(row)
-                    continue
-
-                if not all_matches:
-                    _log(f"  │    {sub_key:16s}  — no match  (η_tol={mcfg.eta_tol})")
-                    rows.append(row)
-                    continue
-
-                # ── match found ─────────────────────────────────────────────
-                best  = all_matches[0]
-                l0    = _level0.check(lat_sub, lat_mof)
-                row.update({
-                    "match_found": True,
-                    "theta_deg":   round(best.theta_deg, 2),
-                    "eta":         round(best.eta, 6),
-                    "eps_11":      round(best.strain[0, 0], 5),
-                    "eps_22":      round(best.strain[1, 1], 5),
-                    "eps_12":      round(best.strain[0, 1], 5),
-                    "area_A2":     round(best.area, 1),
-                    "L0_feasible": l0.feasible,
-                })
-
-                # per-pair sub-directory: {mof_stem}_{hkl}__{substrate_key}
-                pair_dir = run_dir / f"{face_stem}__{sub_key}"
-                if cfg.outputs & {"png", "pdf"}:
-                    pair_dir.mkdir(exist_ok=True)
-
-                if "png" in cfg.outputs:
-                    png_path = pair_dir / "match_card.png"
-                    try:
-                        fig = plot_match_card(
-                            lat_sub, lat_mof, l1_res, best,
-                            save_path=str(png_path), dpi=150,
-                        )
-                        plt.close(fig)
-                        row["png_path"] = str(png_path.relative_to(
-                            Path(cfg.output_dir).resolve()
-                        ))
-                    except Exception as exc:
-                        _log(f"  │    {sub_key:16s}  WARN PNG: {exc}")
-
-                if "pdf" in cfg.outputs:
-                    pdf_path = pair_dir / "report.pdf"
-                    try:
-                        generate_pdf_report(
-                            lat_sub, lat_mof, l1_res, all_matches,
-                            title=f"{mof_name} {hkl_str}  /  {sub_key}",
-                            save_path=str(pdf_path),
-                            top_n=cfg.top_n_report,
-                        )
-                        row["pdf_path"] = str(pdf_path.relative_to(
-                            Path(cfg.output_dir).resolve()
-                        ))
-                    except Exception as exc:
-                        _log(f"  │    {sub_key:16s}  WARN PDF: {exc}")
-
-                _log(
-                    f"  │    {sub_key:16s}  η={best.eta:.5f}"
-                    f"  θ={best.theta_deg:.1f}°"
-                    f"  L0={'✓' if l0.feasible else '✗'}"
-                )
-                rows.append(row)
-
-        _log(f"  └─ done")
+    if n_workers:
+        # ── Parallel processing ─────────────────────────────────────────────
+        import concurrent.futures as _cf
+        w_args = [(cif, dict(subs), cfg, mcfg, str(run_dir)) for cif in paths]
+        with _cf.ProcessPoolExecutor(max_workers=n_workers) as pool:
+            for batch_rows in pool.map(_worker, w_args):
+                rows.extend(batch_rows)
+    else:
+        # ── Serial processing ───────────────────────────────────────────────
+        for cif in paths:
+            rows.extend(_run_single_cif(cif, subs, cfg, mcfg, run_dir, _log))
 
     # ── summary ─────────────────────────────────────────────────────────────
     df = pd.DataFrame(rows) if rows else pd.DataFrame()

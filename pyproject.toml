@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name            = "miqrocal"
-version         = "0.1.0"
+version         = "0.3.0"
 description     = "2D epitaxial lattice matching via three-level hierarchical screening"
 readme          = "README.md"
 license         = { file = "LICENSE" }
@@ -40,9 +40,12 @@ dev = [
     "ruff>=0.4",
 ]
 
+[project.scripts]
+miqrocal = "miqrocal.cli:main"
+
 [project.urls]
-Repository    = "https://github.com/yourname/miqrocal"
-Documentation = "https://github.com/yourname/miqrocal/blob/main/docs/lattice_matching_theory.md"
+Repository    = "https://github.com/lichman0405/miqrophi"
+Documentation = "https://github.com/lichman0405/miqrophi/blob/main/docs/lattice_matching_theory.md"
 
 [tool.setuptools.packages.find]
 where = ["."]

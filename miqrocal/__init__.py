@@ -1,3 +1,4 @@
+__version__: str = "0.3.0"
 """
 miqrocal — 2D epitaxial lattice matching via three-level hierarchical screening.
 
