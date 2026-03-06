@@ -17,6 +17,7 @@ HKUST-1 on Au(100) as a worked example.
 7. [Common questions from experimentalists](#7-common-questions-from-experimentalists)
 8. [Substrate database](#8-substrate-database)
 9. [Choosing a surface plane (Miller indices)](#9-choosing-a-surface-plane-miller-indices)
+10. [Batch pipeline (`batch_run`)](#10-batch-pipeline-batch_run)
 
 ---
 
@@ -247,7 +248,7 @@ choices:
 
 | MOF family | Typical facet | Reason |
 |-----------|---------------|--------|
-| HKUST-1 (cubic, Fm-3m) | (001) | Square face, matches square substrates |
+| HKUST-1 (cubic, Fm-3m) | (111) | F-centering: `{100}`/`{010}`/`{001}` all absent; `{111}` is the true BFDH top face |
 | UiO-66 (cubic, Fm-3m) | (001), (111) | (001) smallest cell; (111) for hex. subs. |
 | MIL-53 (orthorhombic) | (100) | Pore aperture exposed |
 | ZIF-8 (cubic, I-43m) | (001) | Flat square face |
@@ -398,12 +399,18 @@ experiment.  Use this to narrow down which faces to pass to the matcher.
 (1, 0, 0)   d= 5.93 Å   a=7.07  b=10.67 γ=90.0°
 ```
 
-**Example output — HKUST-1 (cubic):**
+**Example output — HKUST-1 (Fm-3m, F-centering applied):**
 ```
-(1, 0, 0)   d=26.34 Å   a=26.34  b=26.34  γ=90.0°  ← all equivalent by cubic symmetry
-(0, 1, 0)   d=26.34 Å   a=26.34  b=26.34  γ=90.0°
-(0, 0, 1)   d=26.34 Å   a=26.34  b=26.34  γ=90.0°
+(1, 1, 1)   d=15.21 Å   a=37.26  b=37.26  γ=60.0°  ← {111} family: first BFDH face after F-centering
+(1, 1, -1)  d=15.21 Å   a=37.26  b=37.26  γ=60.0°  ← symmetry-equivalent variant
+(1, -1, 1)  d=15.21 Å   a=37.26  b=37.26  γ=60.0°  ← symmetry-equivalent variant
 ```
+
+> **Why not `(1,0,0)`?**  HKUST-1 belongs to space group Fm̄3m (No. 225).
+> For F-centering, h, k, l must all be odd or all be even.  The index set
+> (1, 0, 0) is mixed parity → absent.  Same for (0,1,0) and (0,0,1).
+> The true first-allowed face is (1,1,1) with d = 26.34/√3 ≈ 15.21 Å,
+> consistent with STM/AFM observations of HKUST-1 on Au(111).
 
 ### Manual selection
 
@@ -429,10 +436,125 @@ If the output cell seems too large (> 50 Å), the crystal may have a small
 primitive cell that can be used instead.  Check `read_cell()` output for the
 raw 3D cell size.
 
+---
+
+## 10. Batch pipeline (`batch_run`)
+
+For screening many CIF files against multiple substrates in one call, use
+`batch_run()` instead of writing a manual loop.
+
+### Basic usage
+
+```python
+from miqrocal import batch_run, BatchConfig, MatcherConfig
+
+df = batch_run(
+    "data/*.cif",                          # glob pattern or list of paths
+    config=BatchConfig(
+        n_faces     = 3,                   # BFDH top-3 faces per MOF
+        substrates  = ["Au_111", "Cu_111", "Au_100"],
+        run_tag     = "screen_v1",         # appended to the output directory name
+        outputs     = {"csv", "pdf", "png"},
+        matcher_cfg = MatcherConfig(eta_tol=0.04),
+    ),
+)
+
+# Filter and display matches
+matched = df[df.match_found].sort_values("eta")
+print(matched[["mof_name", "hkl", "substrate", "theta_deg", "eta"]].to_string())
+```
+
+### `BatchConfig` fields
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `substrates` | `None` | List of `SUBSTRATE_DB` keys to screen against; `None` = all 11 substrates |
+| `n_faces` | `1` | BFDH top-N faces per MOF |
+| `outputs` | `{"csv","pdf","png"}` | Controls which files are written (see below) |
+| `output_dir` | `"output"` | Root directory for all run output |
+| `run_tag` | `""` | Human-readable suffix appended to the run directory name |
+| `matcher_cfg` | `None` | Full `MatcherConfig` for fine-grained tuning; library defaults used when `None` |
+| `top_n_report` | `10` | Rows shown in each PDF report |
+| `verbose` | `True` | Print per-pair progress to stdout |
+
+### Output directory structure
+
+Each `batch_run()` call creates a self-contained, **timestamped run directory**
+inside `output_dir` so that successive screening runs never overwrite each other:
+
+```
+output/
+  run_2026-03-06_12-00-00_screen_v1/    ← one directory per batch_run() call
+    summary.csv                          ← one row per (MOF face × substrate) pair
+    HKUST-1_111__Au_111/                 ← {mof_stem}_{hkl}__{substrate}
+      match_card.png
+      report.pdf
+    HKUST-1_111__Cu_111/
+      match_card.png
+      report.pdf
+    Co_sql_001__Au_100/
+      match_card.png
+      report.pdf
+    ...
+```
+
+All directory and file names use only alphanumeric characters, underscores, and
+hyphens — no spaces, colons, or Windows-unsafe characters — so paths are safe
+and **traceable** across all platforms.
+
+### Controlling output content
+
+Pass any subset of `{"csv", "pdf", "png"}` to `outputs`:
+
+```python
+# In-memory only, no files written (fastest for exploratory analysis)
+df = batch_run("data/*.cif", config=BatchConfig(outputs=set()))
+
+# Only the summary CSV (no per-pair graphics)
+df = batch_run("data/*.cif", config=BatchConfig(outputs={"csv"}))
+
+# Full output: CSV + PNG match cards + PDF reports
+df = batch_run("data/*.cif", config=BatchConfig(outputs={"csv", "pdf", "png"}))
+```
+
+### Summary CSV columns
+
+| Column | Meaning |
+|--------|---------|
+| `cif_file` | Basename of the source CIF |
+| `mof_name` | Compound name from CIF (or file stem) |
+| `hkl` | Miller indices, e.g. `"(1,1,1)"` |
+| `d_hkl_A` | Interplanar spacing (Å) |
+| `mof_a` / `mof_b` / `mof_gamma` | 2D surface lattice parameters |
+| `substrate` | Substrate key from `SUBSTRATE_DB` |
+| `match_found` | `True` if any match with η < η_tol |
+| `theta_deg` | Rotation angle of best match (`NaN` if none) |
+| `eta` | Strain index η of best match |
+| `eps_11` / `eps_22` / `eps_12` | Green–Lagrange strain components |
+| `area_A2` | Substrate supercell area (Å²) |
+| `L0_feasible` | Algebraic commensurability flag |
+| `png_path` | Path to PNG relative to `output_dir` |
+| `pdf_path` | Path to PDF relative to `output_dir` |
+
 ### Note on systematic absences
 
-The BFDH implementation does not apply systematic extinction rules (which
-depend on the space group).  For P1 structures (most PACMAN-processed MOF
-CIFs) this is exact.  For higher-symmetry crystals (e.g. Fm-3m), some faces
-may be systematically absent but will still appear in the ranking — the
-d-spacing values and face ordering remain valid for practical use.
+`bfdh_faces()` applies **lattice-centering extinction rules** automatically.
+The space group symbol is read from `_symmetry_space_group_name_H-M` (or
+`_symmetry_Int_Tables_number` as fallback) to determine the Bravais centering
+type.  The general centering conditions are then applied during face
+enumeration:
+
+| Centering | Condition for reflection to be **present** |
+|-----------|-----------------------------------------|
+| P | all *hkl* |
+| I | *h* + *k* + *l* = 2*n* |
+| F | *h*, *k*, *l* all odd **or** all even |
+| A | *k* + *l* = 2*n* |
+| B | *h* + *l* = 2*n* |
+| C | *h* + *k* = 2*n* |
+| R | −*h* + *k* + *l* = 3*n* |
+
+Screw-axis and glide-plane extinctions are not applied (centering alone is
+sufficient to correct all common cubic and non-primitive MOF space groups).
+If the space group cannot be parsed, the structure is treated as P (no
+extinction) to remain compatible with minimal-metadata CIFs.

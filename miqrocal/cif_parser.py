@@ -405,9 +405,10 @@ def bfdh_faces(
 
     Example
     -------
+    >>> # HKUST-1 (Fm-3m, F-centering): {100} family absent → {111} family first
     >>> faces = bfdh_faces("examples/HKUST-1.cif", n_faces=3)
     >>> [(hkl, round(d, 2)) for hkl, d in faces]
-    [((0, 0, 1), 26.34), ((0, 1, 0), 26.31), ((1, 0, 0), 26.27)]
+    [((1, 1, 1), 15.21), ((1, 1, -1), 15.21), ((1, -1, 1), 15.21)]
     """
     cell = read_cell(cif_path)
     cif_text = Path(cif_path).read_text(encoding="utf-8", errors="replace")
@@ -467,12 +468,13 @@ def best_surface_lattice(
 
     Example
     -------
+    >>> # HKUST-1 (Fm-3m, F-centering): {100}/{010}/{001} absent → {111} family leads
     >>> results = best_surface_lattice("examples/HKUST-1.cif", n_faces=3)
     >>> for hkl, d, lat in results:
     ...     print(hkl, f"d={d:.2f}A", f"a={lat.a:.2f} b={lat.b:.2f} g={lat.gamma_deg:.1f}")
-    (0, 0, 1)  d=26.34A  a=26.34  b=26.34  g=90.0
-    (0, 1, 0)  d=26.31A  a=26.34  b=26.34  g=90.0
-    (1, 0, 0)  d=26.27A  a=26.34  b=26.34  g=90.0
+    (1, 1, 1)   d=15.21A  a=37.26  b=37.26  g=60.0
+    (1, 1, -1)  d=15.21A  a=37.26  b=37.26  g=60.0
+    (1, -1, 1)  d=15.21A  a=37.26  b=37.26  g=60.0
     """
     ranked = bfdh_faces(cif_path, n_faces=n_faces, hkl_max=hkl_max)
     cell   = read_cell(cif_path)

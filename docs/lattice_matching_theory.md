@@ -344,7 +344,90 @@ Output: DataFrame sorted by eta; each row contains:
 
 ---
 
-## 8  References
+## 8  BFDH Face Pre-selection and Centering Extinction Rules
+
+### 8.1  Physical Motivation
+
+Before running the three-level matching pipeline, the crystal surface to
+expose must be identified.  The **Bravais–Friedel–Donnay–Harker (BFDH) rule**
+provides a rapid, structure-based prediction: faces with larger interplanar
+spacings d_hkl grow more slowly (lower attachment energy) and therefore
+dominate the equilibrium crystal morphology.  These are also the surfaces
+most likely to be exposed in thin-film epitaxy experiments.
+
+### 8.2  Interplanar Spacing
+
+For a 3D lattice with reciprocal basis vectors **b**₁, **b**₂, **b**₃, the
+spacing for the (*hkl*) family of planes is
+
+$$d_{hkl} = \frac{2\pi}{|\mathbf{G}_{hkl}|}, \qquad
+  \mathbf{G}_{hkl} = h\,\mathbf{b}_1 + k\,\mathbf{b}_2 + l\,\mathbf{b}_3$$
+
+Faces are enumerated up to a maximum index |h|, |k|, |l| ≤ N_max, ranked in
+decreasing order of d_hkl, and the top-N are forwarded to surface lattice
+extraction and matching.
+
+### 8.3  Centering Extinction Rules
+
+For lattices with a non-primitive Bravais centering (I, F, A, B, C, R) the
+unit cell contains additional lattice translations beyond the corner
+positions.  By Bragg's law, reflections from planes related by these
+translations interfere destructively whenever the centering condition is
+violated, giving zero structure factor.  Such faces carry no diffraction
+intensity and therefore provide no driving force for epitaxial nucleation.
+
+The general conditions for the reflection (*hkl*) to be **present** are:
+
+| Centering | Condition |
+|-----------|-----------|
+| P | all *hkl* (primitive — no centering extinction) |
+| I (body-centred) | *h* + *k* + *l* = 2*n* |
+| F (face-centred) | *h*, *k*, *l* all odd **or** all even |
+| A | *k* + *l* = 2*n* |
+| B | *h* + *l* = 2*n* |
+| C | *h* + *k* = 2*n* |
+| R (obverse) | −*h* + *k* + *l* = 3*n* |
+
+**Implementation.**  The centering type is determined from the CIF via the
+Hermann–Mauguin space group symbol (`_symmetry_space_group_name_H-M`, first
+letter); or from `_symmetry_Int_Tables_number` looked up against a precompiled
+table of all 230 space groups.  If neither tag is present, the structure is
+treated as primitive (P), giving the conservative over-inclusive result.
+
+**Screw-axis and glide-plane extinctions** (which affect zone-specific
+reflection rows, e.g. *0kl* for a *b*-glide) are intentionally excluded:
+these zone-specific conditions add significant complexity but improve BFDH
+morphology predictions only marginally for typical MOF thin-film experiments.
+
+### 8.4  Case Study: HKUST-1 (Fm̄3m, No. 225)
+
+HKUST-1 (Cu₃(BTC)₂) crystallises in space group **Fm̄3m** — a face-centred
+cubic (F) lattice with a ≈ 26.34 Å.
+
+**Without extinction**, the three faces with the largest d_hkl are {100},
+{010}, {001} (d = 26.34 Å each, square surface lattice).  This is physically
+incorrect: for F-centering the condition is all-odd or all-even:
+
+$$\text{(1,0,0):}\quad h=1\,(\text{odd}),\;k=0\,(\text{even}),\;l=0\,(\text{even})
+\;\Rightarrow\; \text{mixed parity} \;\Rightarrow\; \textbf{absent}$$
+
+**After the F-centering filter**, the true top BFDH faces are:
+
+| *hkl* | *d* (Å) | Surface lattice | Allowed because |
+|-------|---------|-----------------|----------------|
+| (1,1,1) | 15.21 | *a* = *b* = 37.26 Å, γ = 60° | all odd |
+| (2,0,0) | 13.17 | *a* = *b* = 26.34 Å, γ = 90° | all even |
+| (2,2,0) |  9.31 | *a* = 37.26 Å, *b* = 26.34 Å, γ = 90° | all even |
+
+This is in agreement with experimental observations: HKUST-1 thin films grown
+by liquid-phase epitaxy on Au(111) expose the (111) face, presenting a
+hexagonal copper-paddle-wheel motif that matches the hexagonal Au(111)
+surface periodicity.  The corrected BFDH ranking therefore points the
+epitaxy matcher in the physically correct direction from the outset.
+
+---
+
+## 9  References
 
 - **Zur & McGill (1984)**, J. Appl. Phys. 55, 378 — classical supercell
   enumeration framework (the approach replaced by this algorithm at Level 2)
