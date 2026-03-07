@@ -167,7 +167,7 @@ def _run_single_cif(
 
             pair_dir = run_dir / f"{face_stem}__{sub_key}"
             if cfg.outputs & {"png", "pdf"}:
-                pair_dir.mkdir(exist_ok=True)
+                pair_dir.mkdir(parents=True, exist_ok=True)
 
             if "png" in cfg.outputs:
                 png_path = pair_dir / "match_card.png"
@@ -339,7 +339,7 @@ def batch_run(
     if not subs:
         raise ValueError(f"No valid substrate keys found in SUBSTRATE_DB: {keys}")
 
-    # ── timestamped run directory ────────────────────────────────────────────
+    # ── timestamped run directory ─────────────────────────────────────────────
     ts       = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     dir_name = f"run_{ts}_{_safe(cfg.run_tag)}" if cfg.run_tag else f"run_{ts}"
     run_dir  = Path(cfg.output_dir) / dir_name
@@ -356,7 +356,7 @@ def batch_run(
 
     _log: Callable[..., None] = print if cfg.verbose else _silent
     _log(f"\n{'═' * 62}")
-    _log("  miqrocal batch_run")
+    _log("  miqrophi batch_run")
     _log(f"  {len(paths)} CIF(s)  ×  {len(subs)} substrate(s)"
          f"  ×  up to {cfg.n_faces} face(s)  =  up to"
          f" {len(paths) * len(subs) * cfg.n_faces} pairs")

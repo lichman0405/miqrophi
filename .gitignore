@@ -1,55 +1,63 @@
-# Python
+# ── Python bytecode & extensions ──────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 *.so
+*.dll
+
+# ── Numba JIT cache (generated at runtime, not source) ────────────────────
+*.nbc
+*.nbi
+
+# ── Packaging & distribution ──────────────────────────────────────────────
 *.egg
 *.egg-info/
 dist/
 build/
 .eggs/
 wheels/
+MANIFEST
+pip-wheel-metadata/
+share/python-wheels/
+*.editable
 
-# Virtual environments
+# ── Virtual environments ───────────────────────────────────────────────────
 .venv/
 venv/
 env/
 ENV/
 
-# pip editable install
-*.editable
-
-# Distribution / packaging
-MANIFEST
-pip-wheel-metadata/
-share/python-wheels/
-
-# Pytest
+# ── Testing & coverage ────────────────────────────────────────────────────
 .pytest_cache/
 .cache/
 htmlcov/
 .coverage
 coverage.xml
+coverage*.txt
+cov*.txt
 
-# Jupyter
+# ── Jupyter ───────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
-*.ipynb
 
-# IDEs
-.vscode/
+# ── IDEs ──────────────────────────────────────────────────────────────────
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# ── OS ────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# Data and results (project-specific)
+# ── Project runtime outputs ───────────────────────────────────────────────
 output/*
 !output/.gitkeep
 results/
+
+# ── Temporary / scratch scripts at repo root ──────────────────────────────
+_*.py
+
+# ── Data files (keep examples/ tracked, ignore ad-hoc dumps) ─────────────
 *.csv
 *.xlsx

@@ -158,7 +158,10 @@ def _cmd_run_or_batch(args: argparse.Namespace, glob_or_files) -> int:
         verbose      = not args.quiet,
     )
 
-    df = batch_run(glob_or_files, config=cfg)
+    try:
+        df = batch_run(glob_or_files, config=cfg)
+    except FileNotFoundError as exc:
+        sys.exit(f"[miqrophi] {exc}")
     _print_summary(df)
     return 0
 

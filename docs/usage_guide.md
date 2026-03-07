@@ -1,4 +1,4 @@
-# miqrocal Usage Guide
+# miqrophi Usage Guide
 
 This guide explains, step by step, how to go from a crystal structure file
 (CIF) all the way to an experimentally interpretable epitaxy prediction, using
@@ -86,7 +86,7 @@ angle γ from it.
 **Option A — from a CIF file (recommended)**
 
 ```python
-from miqrocal.cif_parser import surface_lattice
+from miqrophi.cif_parser import surface_lattice
 
 # Which face of the crystal is exposed?
 # For HKUST-1 grown on Au(100), experimentally the (001) face is observed.
@@ -98,7 +98,7 @@ print(lat_mof)
 **Option B — from published lattice parameters**
 
 ```python
-from miqrocal import Lattice2D
+from miqrophi import Lattice2D
 
 # HKUST-1 (001) surface: a = b = 26.343 Å, γ = 90°
 lat_mof = Lattice2D(a=26.343, b=26.343, gamma_deg=90.0, label="HKUST-1(001)")
@@ -114,8 +114,8 @@ angle between them using VESTA's bond/length tool.
 ## 3. Running the pipeline
 
 ```python
-from miqrocal import EpitaxyMatcher, MatcherConfig, Lattice2D, SUBSTRATE_DB
-from miqrocal.cif_parser import surface_lattice
+from miqrophi import EpitaxyMatcher, MatcherConfig, Lattice2D, SUBSTRATE_DB
+from miqrophi.cif_parser import surface_lattice
 
 # ── Define the MOF surface ──────────────────────────────────────────────────
 lat_mof = surface_lattice("examples/HKUST-1.cif", hkl=(0, 0, 1))
@@ -174,17 +174,17 @@ L0_feasible = False  OR  eta > 0.05
 
 ```python
 import matplotlib.pyplot as plt
-from miqrocal import level1, level2, plot_match_card, SUBSTRATE_DB
-from miqrocal.cif_parser import surface_lattice
+from miqrophi import coincidence, supercell, plot_match_card, SUBSTRATE_DB, MatcherConfig
+from miqrophi.cif_parser import surface_lattice
 
 lat_sub = SUBSTRATE_DB["Au_100"]
 lat_mof = surface_lattice("examples/HKUST-1.cif", hkl=(0, 0, 1))
 cfg     = MatcherConfig(sigma=0.4, eta_tol=0.04)
 
-l1      = level1.compute(lat_sub, lat_mof, G_cutoff=8.0, sigma=cfg.sigma)
-matches = level2.find_matches(lat_sub, lat_mof,
-                              theta_deg=l1.theta_peaks[0],
-                              eta_tol=cfg.eta_tol)
+l1      = coincidence.compute(lat_sub, lat_mof, G_cutoff=8.0, sigma=cfg.sigma)
+matches = supercell.find_matches(lat_sub, lat_mof,
+                                 theta_deg=l1.theta_peaks[0],
+                                 eta_tol=cfg.eta_tol)
 best    = min(matches, key=lambda m: m.eta)
 
 fig = plot_match_card(lat_sub, lat_mof, l1, best, save_path="match.png")
@@ -259,8 +259,8 @@ prediction in VESTA or Mercury.
 ### Step 3 — extract the 2D lattice and run
 
 ```python
-from miqrocal import EpitaxyMatcher, MatcherConfig, SUBSTRATE_DB
-from miqrocal.cif_parser import surface_lattice, read_cell
+from miqrophi import EpitaxyMatcher, MatcherConfig, SUBSTRATE_DB
+from miqrophi.cif_parser import surface_lattice
 
 # Inspect CIF first
 cell = read_cell("my_mof.cif")
@@ -380,7 +380,7 @@ substrate = Lattice2D(a=3.524, b=3.524, gamma_deg=120.0, label="Ni(111)")
 For any CIF, let the BFDH rule decide automatically:
 
 ```python
-from miqrocal import best_surface_lattice
+from miqrophi import best_surface_lattice
 
 # Returns top-5 faces ranked by interplanar spacing (most prominent first)
 results = best_surface_lattice("my_mof.cif", n_faces=5)
@@ -417,7 +417,7 @@ experiment.  Use this to narrow down which faces to pass to the matcher.
 If you know which face is exposed (e.g. from literature), specify hkl explicitly:
 
 ```python
-from miqrocal.cif_parser import surface_lattice
+from miqrophi.cif_parser import surface_lattice
 
 # Square (001) face: natural choice for Au(100)
 lat_001 = surface_lattice("examples/HKUST-1.cif", hkl=(0, 0, 1))
@@ -446,7 +446,7 @@ For screening many CIF files against multiple substrates in one call, use
 ### Basic usage
 
 ```python
-from miqrocal import batch_run, BatchConfig, MatcherConfig
+from miqrophi import batch_run, BatchConfig, MatcherConfig
 
 df = batch_run(
     "data/*.cif",                          # glob pattern or list of paths

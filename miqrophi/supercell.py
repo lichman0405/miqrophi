@@ -29,6 +29,15 @@ import numpy as np
 
 from .lattice import Lattice2D
 
+# ---------------------------------------------------------------------------
+# Optional Numba acceleration for the inner LLL loop
+# ---------------------------------------------------------------------------
+try:
+    from numba import njit as _njit
+    _NUMBA = True
+except ImportError:  # pragma: no cover
+    _NUMBA = False
+
 
 @dataclass
 class MatchResult:
@@ -47,31 +56,26 @@ _DEFAULT_LAMBDAS: list[float] = [0.02, 0.05, 0.1, 0.2, 0.5, 1.0]
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# LLL lattice reduction  —  Numba-JIT version (optional) + pure-Python fallback
 # ---------------------------------------------------------------------------
 
-def _lll_reduce(B: np.ndarray, delta: float = 0.75) -> np.ndarray:
-    """
-    Floating-point LLL lattice basis reduction (Gram-Schmidt variant).
+def _gs(B: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Gram-Schmidt orthogonalisation (pure Python, used only for the fallback)."""
+    d = len(B)
+    Bs = np.zeros_like(B)
+    mu = np.zeros((d, d))
+    for i in range(d):
+        Bs[i] = B[i].copy()
+        for j in range(i):
+            mu[i, j] = np.dot(B[i], Bs[j]) / np.dot(Bs[j], Bs[j])
+            Bs[i] -= mu[i, j] * Bs[j]
+    return Bs, mu
 
-    Parameters
-    ----------
-    B     : (d, d) lattice basis, rows are basis vectors
-    delta : Lovasz parameter in (0.25, 1); default 0.75
-    """
+
+def _lll_reduce_py(B: np.ndarray, delta: float = 0.75) -> np.ndarray:
+    """Pure-Python LLL — fallback when Numba is not available."""
     B = B.copy().astype(float)
     d = len(B)
-
-    def _gs(B: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        Bs = np.zeros_like(B)
-        mu = np.zeros((d, d))
-        for i in range(d):
-            Bs[i] = B[i].copy()
-            for j in range(i):
-                mu[i, j] = np.dot(B[i], Bs[j]) / np.dot(Bs[j], Bs[j])
-                Bs[i] -= mu[i, j] * Bs[j]
-        return Bs, mu
-
     k = 1
     while k < d:
         Bs, mu = _gs(B)
@@ -79,13 +83,62 @@ def _lll_reduce(B: np.ndarray, delta: float = 0.75) -> np.ndarray:
             if abs(mu[k, j]) > 0.5:
                 B[k] -= round(float(mu[k, j])) * B[j]
                 Bs, mu = _gs(B)
-        lovasz = np.dot(Bs[k], Bs[k]) >= (delta - mu[k, k-1] ** 2) * np.dot(Bs[k-1], Bs[k-1])
+        lovasz = (np.dot(Bs[k], Bs[k]) >=
+                  (delta - mu[k, k - 1] ** 2) * np.dot(Bs[k - 1], Bs[k - 1]))
         if lovasz:
             k += 1
         else:
             B[[k, k - 1]] = B[[k - 1, k]]
             k = max(k - 1, 1)
     return B
+
+
+if _NUMBA:
+    @_njit(cache=True)
+    def _gs_jit(B: np.ndarray) -> tuple[np.ndarray, np.ndarray]:  # pragma: no cover
+        """Gram-Schmidt orthogonalisation (Numba nopython)."""
+        d = B.shape[0]
+        Bs = np.zeros_like(B)
+        mu = np.zeros((d, d))
+        for i in range(d):
+            Bs[i] = B[i].copy()
+            for j in range(i):
+                denom = np.dot(Bs[j], Bs[j])
+                mu_ij = np.dot(B[i], Bs[j]) / denom if denom != 0.0 else 0.0
+                mu[i, j] = mu_ij
+                Bs[i] -= mu_ij * Bs[j]
+        return Bs, mu
+
+    @_njit(cache=True)
+    def _lll_reduce_jit(B: np.ndarray, delta: float) -> np.ndarray:  # pragma: no cover
+        """
+        LLL lattice basis reduction compiled with Numba (nopython mode).
+        Achieves near-C performance on the inner loop over 4-D embedding lattices.
+        """
+        d = B.shape[0]
+        k = 1
+        while k < d:
+            Bs, mu = _gs_jit(B)
+            for j in range(k - 1, -1, -1):
+                if abs(mu[k, j]) > 0.5:
+                    B[k] -= np.round(mu[k, j]) * B[j]
+                    Bs, mu = _gs_jit(B)
+            Bsk2  = np.dot(Bs[k],     Bs[k])
+            Bsk12 = np.dot(Bs[k - 1], Bs[k - 1])
+            if Bsk2 >= (delta - mu[k, k - 1] ** 2) * Bsk12:
+                k += 1
+            else:
+                tmp      = B[k].copy()
+                B[k]     = B[k - 1].copy()
+                B[k - 1] = tmp
+                k        = max(k - 1, 1)
+        return B
+
+    def _lll_reduce(B: np.ndarray, delta: float = 0.75) -> np.ndarray:
+        """Dispatch to the Numba-compiled LLL implementation."""
+        return _lll_reduce_jit(B.copy().astype(np.float64), delta)
+else:  # pragma: no cover
+    _lll_reduce = _lll_reduce_py  # type: ignore[assignment]
 
 
 def _embedding_basis(T: np.ndarray, lam: float) -> np.ndarray:

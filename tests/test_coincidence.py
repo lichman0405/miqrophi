@@ -13,7 +13,11 @@ class TestLevel1Regression:
         assert len(result.theta_peaks) >= 5
         assert math.isclose(result.theta_peaks[0], 270.0, abs_tol=0.2)
         assert math.isclose(result.theta_peaks[1], 90.0, abs_tol=0.2)
-        assert math.isclose(result.theta_peaks[3], 50.76, abs_tol=0.2)
+        # 50.76° and 140.76° are 4-fold-symmetry-equivalent peaks; which one
+        # appears at index 3 depends on floating-point tie-breaking in the sort.
+        _EQUIV_FAMILY = [50.76, 140.76]
+        assert any(math.isclose(result.theta_peaks[3], ex, abs_tol=0.2)
+                   for ex in _EQUIV_FAMILY)
         assert math.isclose(result.phi_peaks[0], 1.0, rel_tol=1e-9)
         assert result.phi_peaks[3] > 0.94
 

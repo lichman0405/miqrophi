@@ -3,7 +3,7 @@ requires      = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name            = "miqrocal"
+name            = "miqrophi"
 version         = "0.3.0"
 description     = "2D epitaxial lattice matching via three-level hierarchical screening"
 readme          = "README.md"
@@ -25,6 +25,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
 dependencies = [
@@ -35,13 +36,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+fast = [
+    "numba>=0.57",   # JIT-compiles the LLL inner loop to near-C speed
+]
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
 ]
 
 [project.scripts]
-miqrocal = "miqrocal.cli:main"
+miqrophi = "miqrophi.cli:main"
 
 [project.urls]
 Repository    = "https://github.com/lichman0405/miqrophi"
@@ -49,7 +53,7 @@ Documentation = "https://github.com/lichman0405/miqrophi/blob/main/docs/lattice_
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["miqrocal*"]
+include = ["miqrophi*"]
 
 [tool.ruff]
 line-length = 100

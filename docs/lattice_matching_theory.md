@@ -1,7 +1,7 @@
 # 2D Epitaxial Lattice Matching: Mathematical and Physicochemical Foundations
 
 > This document derives the complete theoretical basis for the three-level
-> hierarchical screening algorithm implemented in `miqrocal`.
+> hierarchical screening algorithm implemented in `miqrophi`.
 
 ---
 
@@ -427,7 +427,116 @@ epitaxy matcher in the physically correct direction from the outset.
 
 ---
 
-## 9  References
+## 9  Reciprocal-Space Visualization and LEED Spot Prediction
+
+### 9.1  Physical Background
+
+**Low-Energy Electron Diffraction (LEED)** probes the 2D periodicity of a
+surface by measuring the momenta of backscattered electrons.  An electron
+beam at normal incidence scatters elastically whenever the parallel momentum
+transfer equals a 2D reciprocal lattice vector:
+
+$$\Delta\mathbf{k}_{\parallel} = \mathbf{G}_{hk} = h\,\mathbf{b}_1 + k\,\mathbf{b}_2$$
+
+where $\mathbf{b}_1, \mathbf{b}_2$ are the 2D reciprocal basis vectors of
+the surface unit cell.  In a LEED experiment one therefore observes a **spot
+pattern** that is the 2D reciprocal lattice of the topmost periodic layer.
+
+When a MOF overlayer grows on a substrate, both lattices are present
+simultaneously: the substrate contributes its own reciprocal lattice set
+$\{\mathbf{G}_s\}$ and the oriented MOF overlayer contributes a rotated set
+$\{\mathbf{G}_m\}$.  The resulting LEED screen shows spots from both.
+
+### 9.2  Transformation of Reciprocal Vectors Under Rotation
+
+The 2D reciprocal lattice matrix of a lattice with Cartesian matrix $A$ is
+
+$$B = 2\pi\,(A^{-1})^T \quad\Longleftrightarrow\quad A\,B^T = 2\pi\,I$$
+
+When the overlayer is rotated by angle $\theta$ (real-space matrix
+$A' = R_\theta\,A$), the rotated reciprocal matrix becomes
+
+$$B' = 2\pi\,(A'^{-1})^T
+     = 2\pi\,\bigl[(R_\theta A)^{-1}\bigr]^T
+     = 2\pi\,(A^{-1} R_\theta^T)^T
+     = 2\pi\,R_\theta\,(A^{-1})^T
+     = R_\theta\,B$$
+
+**Reciprocal lattice vectors therefore transform under the same rotation as
+the real-space vectors.**  The overlayer Bragg peaks visible in LEED are at
+
+$$\mathbf{G}_m(h,k;\theta) = R_\theta \cdot (h\,\mathbf{b}_1^{(m)} + k\,\mathbf{b}_2^{(m)})$$
+
+### 9.3  Superstructure Spots
+
+In the commensurate case $M A_m = N A_s$, every overlayer reciprocal vector
+can be written as a **rational linear combination** of substrate reciprocal
+vectors.  Reciprocal-lattice points that belong to **both** sets — i.e.
+$\mathbf{G}_s^{(i)} = \mathbf{G}_m^{(j)}$ for some integer indices $(i,j)$
+— are scattered coherently by the interface and appear as **extra bright spots**
+not indexable by the substrate lattice alone.  These are the **superstructure
+reflections** ubiquitous in surface science literature.
+
+Their positions can be predicted directly: every point in the set
+
+$$\{\mathbf{G}_s : \exists\,j,\; |\mathbf{G}_s - \mathbf{G}_m^{(j)}| < \delta\}$$
+
+is a superstructure spot, where $\delta \approx 0.18\,|\mathbf{b}_1^{(s)}|$
+is a near-coincidence tolerance that accommodates the finite strain $\eta$
+accepted by the matcher and any residual angular discretisation.
+
+For a **coincident** (single-row commensurate) system the superstructure
+spots form along a single family of lines in reciprocal space.  For a
+**commensurate** (two-row) system they form a complete 2D sublattice — a
+rectangular, oblique, or hexagonal net depending on $M$ and $N$.
+
+### 9.4  Spot Count and Supercell Size
+
+The number of non-equivalent superstructure spots within a reciprocal-space
+disk of radius $G_{\max}$ scales as
+
+$$N_{\text{super}} \approx \frac{\pi G_{\max}^2}{\Omega^*_{\text{super}}}$$
+
+where $\Omega^*_{\text{super}}$ is the area of the superstructure reciprocal
+unit cell.  For a supercell matrix $M$ with $|\det M| = n_{\text{cells}}$,
+the superstructure reciprocal cell is $n_{\text{cells}}$ times smaller than
+the substrate reciprocal cell:
+
+$$\Omega^*_{\text{super}} = \frac{\Omega^*_s}{n_{\text{cells}}} = \frac{(2\pi)^2}{\Omega_s \cdot n_{\text{cells}}}$$
+
+Large supercells ($n_{\text{cells}} \gg 1$) therefore produce **many dense
+superstructure spots** — a signature of large-periodic moiré-type epitaxy,
+visible as a closely spaced grid around every primary LEED spot.
+
+### 9.5  (00) Beam
+
+The (00) Bragg condition $\mathbf{G} = \mathbf{0}$ is always satisfied and
+corresponds to the specularly reflected beam.  It appears at the centre of
+every LEED pattern regardless of surface structure and is plotted as a filled
+black circle.
+
+### 9.6  Match-Card LEED Panel
+
+The **bottom-left panel** of the match card produced by `plot_match_card()`
+is a direct rendering of the reciprocal space described above:
+
+| Symbol | Physical meaning |
+|--------|-----------------|
+| Blue circles | Substrate Bragg peaks ($\mathbf{G}_s$) |
+| Red triangles | Rotated overlayer Bragg peaks ($\mathbf{G}_m$ at angle θ) |
+| Green stars | Superstructure spots (coincident pairs within tolerance δ) |
+| Black circle | (00) specular beam |
+
+**What to tell your experimentalist:**
+Count the green stars and measure their positions relative to the nearest
+blue circle.  In experiment, superstructure spots are visible as extra LEED
+spots with intensity proportional to the overlayer surface coverage and the
+degree of long-range order.  Their specific positions pin down the supercell
+matrix $M$ more precisely than any other measurement.
+
+---
+
+## 10  References
 
 - **Zur & McGill (1984)**, J. Appl. Phys. 55, 378 — classical supercell
   enumeration framework (the approach replaced by this algorithm at Level 2)

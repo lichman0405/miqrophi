@@ -665,7 +665,7 @@ def generate_pdf_report(
 # Algorithm animation — coincidence search
 # ---------------------------------------------------------------------------
 
-def animate_coincidence_search(
+def animate_coincidence_search(  # pragma: no cover
     lat_sub: Lattice2D,
     lat_mof: Lattice2D,
     *,

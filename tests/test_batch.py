@@ -115,3 +115,24 @@ def test_match_found_column_is_bool(tmp_path):
     assert df["match_found"].dtype == bool or df["match_found"].dtype == object
     # All values must be True or False
     assert set(df["match_found"].unique()).issubset({True, False})
+
+
+# ── PNG output ───────────────────────────────────────────────────────────────
+
+@pytest.mark.skipif(not _CIFS, reason="No CIF files in examples/")
+def test_png_created_when_requested(tmp_path):
+    df = batch_run(
+        _CIFS,
+        config=_cfg(outputs={"png"}, output_dir=str(tmp_path)),
+    )
+    pngs = list(tmp_path.rglob("*.png"))
+    matched = df[df["match_found"]] if not df.empty else df
+    assert len(pngs) == len(matched)
+
+
+@pytest.mark.skipif(not _CIFS, reason="No CIF files in examples/")
+def test_verbose_produces_no_error(tmp_path, capsys):
+    """verbose=True path should not raise; output goes to stdout."""
+    batch_run(_CIFS, config=_cfg(output_dir=str(tmp_path), verbose=True))
+    out = capsys.readouterr().out
+    assert "miqrophi batch_run" in out

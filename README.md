@@ -1,53 +1,76 @@
-# miqrocal
+# miqrophi
 
-**miqrocal** is a Python library for predicting the epitaxial compatibility
-between MOF (metal-organic framework) thin films and crystalline substrates
-using a three-level hierarchical lattice-matching algorithm.
+**miqrophi** (`pip install miqrophi`) is a Python library for predicting the
+epitaxial compatibility between MOF (metal-organic framework) thin films and
+crystalline substrates using a three-level hierarchical lattice-matching
+algorithm.
 
 MOF thin-film epitaxy has emerged as a route to integrate porous, functional
-materials with device-grade substrates \[1, 2\].  Identifying epitaxia-compatible
-substrate–overlayer pairs is the first bottleneck in any growth campaign.
+materials with device-grade substrates \[1, 2\].  Identifying epitaxially
+compatible substrate–overlayer pairs is the first bottleneck in any growth
+campaign.
 
 The classical approach to this problem is the brute-force supercell enumeration
 introduced by **Zur & McGill (1984)** \[3\], which iterates over all integer
-matrix pairs (M, N) and scales as O(N_m² · N_s²).  miqrocal replaces that
+matrix pairs (M, N) and scales as O(N_m² · N_s²).  miqrophi replaces that
 exhaustive search with a three-level hierarchy:
 
-| Level | Method | Key reference | Cost |
-|-------|--------|---------------|------|
-| 0 | Quadratic-form discriminant check | Number theory (classical) | O(1) |
-| 1 | Reciprocal-space coincidence function Φ(θ) via Jacobi–Anger expansion \[4\] | Watson 1944 \[5\] | O(N_G² + K log K) |
-| 2 | Floating-point LLL lattice reduction \[6\] → Green–Lagrange strain tensor | Lenstra, Lenstra & Lovász 1982 | O(d⁴ log B) |
+| Level | Module | Method | Cost |
+|-------|--------|--------|------|
+| 0 | `discriminant` | Quadratic-form discriminant check | O(1) |
+| 1 | `coincidence` | Reciprocal-space coincidence function Φ(θ) via Jacobi–Anger + FFT | O(N_G² + K log K) |
+| 2 | `supercell` | Floating-point LLL lattice reduction → Green–Lagrange strain tensor | O(d⁴ log B) |
 
 Surface-exposure probabilities are estimated using the **BFDH morphological
 rule** \[7\] (Donnay & Harker 1937), which ranks faces by interplanar spacing
 $d_{hkl}$ without requiring a force-field calculation.
 
-The benchmark example CIF for HKUST-1 is based on the crystal structure first
-reported by **Chui et al. (1999)** \[8\].
-
-For a complete mathematical and physicochemical derivation see
+For a complete mathematical derivation see
 [`docs/lattice_matching_theory.md`](docs/lattice_matching_theory.md).
+
+---
+
+## Performance
+
+| Metric | Value |
+|--------|-------|
+| Single pair (L0 + L1 + L2), warm | **~80 ms** |
+| 1 MOF × 11 built-in substrates | **~900 ms** |
+| L1 vectorised speedup vs. original | **4.4×** |
+| L2 Numba JIT speedup (warm) | **~17×** |
+
+Level 1 uses a sparse reciprocal-space pre-filter and exploits
+$I_{-n}(z) = I_n(z)$ symmetry to halve Bessel-function evaluations.
+Level 2 uses an optional Numba-compiled LLL kernel (`pip install miqrophi[fast]`).
+Both fall back gracefully to pure NumPy / SciPy when Numba is absent.
 
 ---
 
 ## Requirements
 
-- Python ≥ 3.10
-- numpy
-- scipy
-- pandas
+- Python ≥ 3.10 (tested on 3.10 – 3.13)
+- `numpy >= 1.24`
+- `scipy >= 1.10`
+- `pandas >= 2.0`
+- `matplotlib >= 3.7`
 
-No compiled extensions required.
+No compiled extensions required for the base install.
 
 ---
 
 ## Installation
 
 ```bash
+# base install
+pip install miqrophi
+
+# with Numba JIT acceleration for the LLL kernel (~17× speedup on L2)
+pip install "miqrophi[fast]"
+
+# development install from source
 git clone https://github.com/lichman0405/miqrophi.git
 cd miqrophi
-pip install -e .
+pip install -e ".[fast,dev]"
 ```
 
 ---
@@ -57,51 +80,47 @@ pip install -e .
 ### Option A — automatic face selection from CIF (recommended)
 
 ```python
-from miqrocal import best_surface_lattice, EpitaxyMatcher, SUBSTRATE_DB, generate_pdf_report
-from miqrocal import level1, level2
+from miqrophi.cif_parser import best_surface_lattice
+from miqrophi import EpitaxyMatcher, MatcherConfig, SUBSTRATE_DB
 
-# Let BFDH rule pick the most prominent face automatically
-results = best_surface_lattice("examples/0000[Co][sql]2[ASR]2.cif", n_faces=3)
-hkl, d_hkl, lat_mof = results[0]   # largest d_hkl → most likely exposed face
-print(hkl, f"d={d_hkl:.2f} Å")    # -> (0,0,1)  d=10.62 Å
+# BFDH rule picks the most prominent face automatically
+results = best_surface_lattice("examples/HKUST-1.cif", n_faces=3)
+hkl, d_hkl, lat_mof = results[0]          # largest d_hkl -> most likely face
+print(hkl, f"d={d_hkl:.2f} Å")            # -> (1, 1, 1)  d=15.21 Å
 
-# Run matching against all substrates and find the best one
-from miqrocal import EpitaxyMatcher, MatcherConfig, SUBSTRATE_DB
-cfg     = MatcherConfig(sigma=0.4, eta_tol=0.05)
-matcher = EpitaxyMatcher(cfg)
-
-best_eta, best_key, best_df = 1.0, None, None
+# Match against all built-in substrates, pick the best
+matcher = EpitaxyMatcher(MatcherConfig(eta_tol=0.05))
+best_eta, best_key = 1.0, None
 for key, lat_sub in SUBSTRATE_DB.items():
     df = matcher.run(lat_sub, lat_mof, verbose=False)
     if df is not None and df["eta"].iloc[0] < best_eta:
-        best_eta, best_key, best_df = df["eta"].iloc[0], key, df
+        best_eta, best_key = df["eta"].iloc[0], key
 print(f"Best substrate: {best_key}  η={best_eta:.4f}")
+# -> Best substrate: Graphene  η=0.0002
 ```
 
 ### Option B — from a specific CIF face
 
 ```python
-from miqrocal import EpitaxyMatcher, MatcherConfig, SUBSTRATE_DB
-from miqrocal.cif_parser import surface_lattice
+from miqrophi import EpitaxyMatcher, MatcherConfig, SUBSTRATE_DB
+from miqrophi.cif_parser import surface_lattice
 
 lat_mof = surface_lattice("examples/HKUST-1.cif", hkl=(0, 0, 1))
 # -> Lattice2D(a=26.343, b=26.343, gamma_deg=90.0)
 
-cfg     = MatcherConfig(sigma=0.4, eta_tol=0.04)
-matcher = EpitaxyMatcher(cfg)
-df      = matcher.run(lat_sub=SUBSTRATE_DB["Au_100"], lat_mof=lat_mof)
+matcher = EpitaxyMatcher(MatcherConfig(eta_tol=0.04))
+df = matcher.run(lat_sub=SUBSTRATE_DB["Au_100"], lat_mof=lat_mof)
 print(df)
 ```
 
 ### Option C — from known lattice parameters
 
 ```python
-from miqrocal import EpitaxyMatcher, MatcherConfig, Lattice2D, SUBSTRATE_DB
+from miqrophi import EpitaxyMatcher, MatcherConfig, Lattice2D, SUBSTRATE_DB
 
 lat_mof = Lattice2D(a=26.343, b=26.343, gamma_deg=90.0, label="HKUST-1(001)")
-cfg     = MatcherConfig(sigma=0.4, eta_tol=0.04)
-matcher = EpitaxyMatcher(cfg)
-df      = matcher.run(lat_sub=SUBSTRATE_DB["Au_100"], lat_mof=lat_mof)
+matcher = EpitaxyMatcher(MatcherConfig(eta_tol=0.04))
+df = matcher.run(lat_sub=SUBSTRATE_DB["Au_100"], lat_mof=lat_mof)
 print(df)
 ```
 
@@ -116,16 +135,19 @@ Sample output:
 ### Generating a PDF report
 
 ```python
-from miqrocal import generate_pdf_report
-# (obtain l1 and sorted matches via level1.compute / level2.find_matches)
+from miqrophi import generate_pdf_report
+from miqrophi import coincidence, supercell, SUBSTRATE_DB, Lattice2D
+
+lat_sub = SUBSTRATE_DB["Au_100"]
+lat_mof = Lattice2D(26.343, 26.343, 90.0, "HKUST-1(001)")
+
+l1      = coincidence.compute(lat_sub, lat_mof)
+matches = supercell.find_matches(lat_sub, lat_mof, theta_deg=l1.theta_peaks[0])
+
 generate_pdf_report(lat_sub, lat_mof, l1, matches,
                     title="HKUST-1 / Au(100)",
                     save_path="output/report.pdf")
 ```
-
-The PDF contains two pages: a text summary table (lattice params + ranked
-matches) and the 2×2 match-card figure.  No external dependencies beyond
-matplotlib are required.
 
 Run the bundled demonstration (saves PNG + PDF to `output/`):
 
@@ -133,8 +155,27 @@ Run the bundled demonstration (saves PNG + PDF to `output/`):
 python run.py
 ```
 
-For a full explanation of all inputs, outputs, and how to interpret the figures,
-see [docs/usage_guide.md](docs/usage_guide.md).
+---
+
+## Batch Processing
+
+```python
+from miqrophi import batch_run, BatchConfig
+
+df = batch_run(
+    "examples/*.cif",
+    config=BatchConfig(
+        substrates=["Au_111", "Au_100", "Graphene"],
+        n_faces=2,
+        outputs={"csv", "pdf"},
+        eta_tol=0.05,           # passed through to MatcherConfig
+    ),
+)
+print(df[["cif_file", "substrate", "eta"]].head())
+```
+
+A timestamped run directory is always created under `output_dir`;
+pass `outputs=set()` for in-memory-only operation (no CSV/PNG/PDF written).
 
 ---
 
@@ -146,16 +187,14 @@ see [docs/usage_guide.md](docs/usage_guide.md).
 Lattice2D(a: float, b: float, gamma_deg: float, label: str = "")
 ```
 
-Represents a 2D periodic lattice.  The first basis vector lies along the
-x-axis.  After construction:
+Represents a 2D periodic lattice.  The first basis vector lies along the x-axis.
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `A` | `(2, 2) ndarray` | Cartesian lattice matrix (rows = basis vectors) |
 | `omega` | `float` | Unit-cell area (Å²) |
 
-Convenience method `recip_matrix()` returns the 2×2 reciprocal lattice
-matrix B satisfying A · Bᵀ = 2π I.
+`recip_matrix()` returns the 2×2 reciprocal lattice matrix B satisfying A · Bᵀ = 2π I.
 
 ### `SUBSTRATE_DB`
 
@@ -180,26 +219,22 @@ Pre-defined substrate lattices (bulk-truncated, ideal surfaces):
 ```python
 MatcherConfig(
     G_cutoff      = 8.0,   # reciprocal-space truncation radius (Å⁻¹)
-    sigma         = 0.3,   # Φ(θ) Gaussian peak width (Å⁻¹); controls angular tolerance
+    sigma         = 0.3,   # Φ(θ) Gaussian peak width (Å⁻¹)
     eta_tol       = 0.05,  # Green–Lagrange strain Frobenius norm tolerance
-    top_theta     = 8,     # number of Level-1 peaks forwarded to Level 2
-    lambda_values = [0.02, 0.05, 0.1, 0.2, 0.5, 1.0],  # LLL embedding weights
+    top_theta     = 8,     # Level-1 peaks forwarded to Level 2
+    lambda_values = [0.02, 0.05, 0.1, 0.2, 0.5, 1.0],
 )
 ```
 
-**Parameter guide:**
+`sigma` — Larger values broaden Φ(θ) peaks; ~0.1–0.5 × (2π / a_sub) is a
+good starting range.
 
-`sigma` — Larger values make Φ(θ) peaks broader and more peaks are found.  A
-good starting value is ~0.1–0.5 × (2π / a_sub).
+`eta_tol` — Matches with η < 0.02 are generally considered physically
+feasible; 0.05–0.10 reveals strained approximate matches.
 
-`eta_tol` — The Frobenius norm of the Green–Lagrange strain tensor.  Matches
-with η < 0.02 are generally considered physically feasible.  Increasing this
-threshold to 0.05–0.10 reveals approximate (strained) matches.
-
-`lambda_values` — Each value in this list produces one LLL solution.  Small λ
-(0.02) favours low-strain large supercells; large λ (1.0) favours small
-supercells with potentially higher strain.  The union of results covers the
-Pareto front.
+`lambda_values` — Each value traces one point on the strain-vs-supercell-size
+Pareto front.  Small λ (0.02) favours low-strain large supercells; large λ
+(1.0) favours compact supercells.
 
 ### `EpitaxyMatcher`
 
@@ -208,9 +243,8 @@ matcher = EpitaxyMatcher(config: MatcherConfig = None)
 df      = matcher.run(lat_sub, lat_mof, verbose=True) -> pd.DataFrame | None
 ```
 
-Returns a `DataFrame` sorted by `eta` or `None` when no match satisfies
-`eta_tol`.  The `L0_feasible` column distinguishes true commensurate matches
-from approximate (symmetry-forbidden) ones.
+Returns a `DataFrame` sorted by `eta`, or `None` when no match satisfies
+`eta_tol`.
 
 ---
 
@@ -219,12 +253,12 @@ from approximate (symmetry-forbidden) ones.
 | Column | Unit | Description |
 |--------|------|-------------|
 | `theta (deg)` | ° | Rotation angle of MOF supercell relative to substrate |
-| `M` | — | 2×2 integer MOF supercell matrix (list of lists) |
+| `M` | — | 2×2 integer MOF supercell matrix |
 | `N` | — | 2×2 integer substrate supercell matrix |
 | `eta` | — | ‖ε‖_F, Frobenius norm of Green–Lagrange strain tensor |
 | `eps_11` | — | Normal strain along first supercell basis vector |
 | `eps_22` | — | Normal strain along second supercell basis vector |
-| `eps_12` | — | Shear strain (related to misfit dislocation density) |
+| `eps_12` | — | Shear strain |
 | `area (A2)` | Å² | Substrate supercell area |
 | `L0_feasible` | bool | True if Level 0 permits exact commensurability |
 
@@ -236,174 +270,132 @@ from approximate (symmetry-forbidden) ones.
 
 HKUST-1 (square, γ = 90°) on Au(111) (hexagonal, γ = 120°).  Level 0
 immediately reports a symmetry prohibition (discriminant ratio 4/3, not a
-perfect square).  The algorithm continues to Level 1/2 to bound the
-approximate match, flagging all results with `L0_feasible = False`.
+perfect square).  Results are returned but flagged `L0_feasible = False`.
 
 ```python
-df = matcher.run(SUBSTRATE_DB["Au_111"], hkust1)
+from miqrophi import EpitaxyMatcher, SUBSTRATE_DB, Lattice2D
+
+hkust1  = Lattice2D(26.343, 26.343, 90.0, "HKUST-1(001)")
+df = EpitaxyMatcher().run(SUBSTRATE_DB["Au_111"], hkust1)
 # L0_feasible is False for all rows
-# best approximate match has large area (>7000 Å²), confirming impracticality
 ```
 
 ### Example 2: Commensurate match — square MOF on square substrate
 
-HKUST-1 on Au(100) (both square).  Level 0 passes (ratio = 1).  The best
-match is at θ ≈ 51° with η ≈ 0.0021, corresponding to a (1, 4) / (−4, 1)
-rotated supercell with biaxial strain ε₁₁ = ε₂₂ ≈ 0.15%.
+HKUST-1 on Au(100) (both square).  Level 0 passes (ratio = 1).  Best match
+at θ ≈ 51°, η ≈ 0.0021, biaxial strain ε₁₁ = ε₂₂ ≈ 0.15%.
 
 ```python
-df = matcher.run(SUBSTRATE_DB["Au_100"], hkust1)
+df = EpitaxyMatcher().run(SUBSTRATE_DB["Au_100"], hkust1)
 # L0_feasible = True, eta ~ 0.002
 ```
 
 ### Example 3: Custom substrate or MOF
 
 ```python
-my_substrate = Lattice2D(a=3.15, b=3.15, gamma_deg=120.0, label="Custom hex")
-my_mof       = Lattice2D(a=12.3, b=15.6, gamma_deg=90.0,  label="MOF-X(100)")
-df = EpitaxyMatcher().run(my_substrate, my_mof)
+from miqrophi import EpitaxyMatcher, Lattice2D
+
+my_sub = Lattice2D(3.15, 3.15, 120.0, "Custom hex")
+my_mof = Lattice2D(12.3, 15.6,  90.0, "MOF-X(100)")
+df = EpitaxyMatcher().run(my_sub, my_mof)
 ```
 
----
+
 
 ## Limitations
 
-The current implementation covers **geometric commensurability only**.
-A complete epitaxial feasibility assessment additionally requires:
+The current implementation covers **geometric commensurability only**:
 
-1. **Surface termination**: which crystal face is exposed is approximated here
-   by the BFDH rule (`best_surface_lattice()`); DFT surface-energy calculations
-   are needed for definitive assignments.
-2. **Surface reconstruction**: real substrates (e.g. Au(111) 22×√3) differ
-   from bulk-truncated parameters in `SUBSTRATE_DB`.
-3. **Chemical compatibility**: geometric matching does not guarantee chemical
-   adhesion.  Functional-group / substrate affinity must be assessed separately.
+1. **Surface termination** is approximated by the BFDH rule; DFT surface-energy
+   calculations are needed for definitive assignments.
+2. **Surface reconstruction** (e.g. Au(111) 22×√3) is not modelled.
+3. **Chemical compatibility** (adhesion, functional-group affinity) must be
+   assessed separately.
 
 ---
 
 ## Visualisation
 
-`miqrocal.visualize` provides five functions for communicating results to
-experimentalists.  All single-panel functions accept an optional `ax` keyword
-so they can be embedded in custom figures.
+`miqrophi.visualize` provides six functions:
 
-| Function | Panel | Content |
-|---|---|---|
-| `plot_phi_curve(l1)` | B | Φ(θ) curve with peak annotations |
-| `plot_lattice_overlay(lat_sub, lat_mof, match)` | A | Real-space substrate + MOF lattice points + supercell parallelogram |
-| `plot_leed_pattern(lat_sub, lat_mof, match)` | C | Simulated LEED: substrate (blue), MOF (red), superstructure spots (green ★) |
-| `plot_strain_ellipse(match)` | D | Unit circle vs. deformed ellipse, principal-strain arrows, ε component table |
-| `plot_match_card(lat_sub, lat_mof, l1, match)` | E | 2×2 figure combining all four panels |
-| `generate_pdf_report(lat_sub, lat_mof, l1, matches)` | — | Two-page PDF: text summary (p.1) + match-card figure (p.2) |
-
-### Quick usage
+| Function | Content |
+|---|---|
+| `plot_phi_curve(l1)` | Φ(θ) curve with peak annotations |
+| `plot_lattice_overlay(lat_sub, lat_mof, match)` | Real-space supercell overlay |
+| `plot_leed_pattern(lat_sub, lat_mof, match)` | Simulated LEED pattern |
+| `plot_strain_ellipse(match)` | Principal-strain ellipse + component table |
+| `plot_match_card(lat_sub, lat_mof, l1, match)` | 2×2 combined figure |
+| `generate_pdf_report(...)` | Two-page PDF: text summary + match card |
 
 ```python
+from miqrophi import plot_match_card, coincidence, supercell, SUBSTRATE_DB, Lattice2D
 import matplotlib.pyplot as plt
-from miqrocal import level1, level2, SUBSTRATE_DB, Lattice2D
-from miqrocal import plot_match_card
 
 lat_sub = SUBSTRATE_DB["Au_100"]
-lat_mof = Lattice2D(18.62, 18.62, 90.0, "HKUST-1(010)")
+lat_mof = Lattice2D(26.343, 26.343, 90.0, "HKUST-1(001)")
 
-l1      = level1.compute(lat_sub, lat_mof, G_cutoff=8.0, sigma=0.4)
-matches = level2.find_matches(lat_sub, lat_mof,
-                              theta_deg=l1.theta_peaks[0],
-                              eta_tol=0.04)
-best    = min(matches, key=lambda m: m.eta)
+l1      = coincidence.compute(lat_sub, lat_mof)
+matches = supercell.find_matches(lat_sub, lat_mof, theta_deg=l1.theta_peaks[0])
 
-fig = plot_match_card(lat_sub, lat_mof, l1, best, save_path="match.png")
+fig = plot_match_card(lat_sub, lat_mof, l1, matches[0], save_path="match.png")
 plt.close(fig)
 ```
-
-Running `python run.py` automatically saves match-card PNGs to the `output/`
-directory for all three demo cases.
 
 ---
 
 ## File Structure
 
 ```
-miqrocal/
-  __init__.py      public API  (__version__)
-  lattice.py       Lattice2D dataclass and SUBSTRATE_DB
-  level0.py        quadratic-form discriminant check
-  level1.py        reciprocal-space coincidence function Phi(theta)
-  level2.py        LLL lattice reduction and Green-Lagrange strain tensor
-  matcher.py       EpitaxyMatcher pipeline and MatcherConfig
-  batch.py         BatchConfig, batch_run (serial + parallel)
-  cli.py           miqrocal CLI entry point
-  visualize.py     five plotting functions (Plans A-E)
+miqrophi/               Python package (import as: import miqrophi)
+  __init__.py           public API exports
+  lattice.py            Lattice2D dataclass and SUBSTRATE_DB
+  discriminant.py       Level 0 — quadratic-form symmetry pre-filter
+  coincidence.py        Level 1 — reciprocal-space coincidence function Φ(θ)
+  supercell.py          Level 2 — LLL lattice reduction + Green–Lagrange strain
+  matcher.py            EpitaxyMatcher pipeline and MatcherConfig
+  batch.py              BatchConfig, batch_run (serial + parallel)
+  cif_parser.py         CIF reader, BFDH face ranking, surface lattice extraction
+  cli.py                miqrophi CLI entry point
+  visualize.py          plotting and PDF report generation
 tests/
-  test_lattice.py  unit tests for Lattice2D and SUBSTRATE_DB
-  test_level0.py   unit tests for Level-0 algebraic check
-  test_cif_parser.py  tests for centering/screw-glide extinctions
-  test_batch.py    tests for batch_run (serial + parallel)
+  test_lattice.py
+  test_discriminant.py
+  test_cif_parser.py
+  test_batch.py
 docs/
   lattice_matching_theory.md   full mathematical derivation
-output/            generated figures (created at runtime)
-run.py             demonstration entry point
-pyproject.toml     package metadata
-CHANGELOG.md       version history
-LICENSE            MIT license
+  usage_guide.md               user guide
+examples/                      sample CIF files
+output/                        generated figures (created at runtime)
+run.py                         demonstration entry point
+pyproject.toml
+CHANGELOG.md
+LICENSE
+```
+
+---
+
+## CLI
+
+```bash
+# list all built-in substrates
+miqrophi substrates
+
+# match a single CIF against specific substrates
+miqrophi run examples/HKUST-1.cif --substrates Au_111 Au_100 Graphene
+
+# batch screen a folder of CIFs
+miqrophi batch "examples/*.cif" --n-faces 2 --eta-tol 0.05 --outputs csv,pdf
 ```
 
 ---
 
 ## References
 
-We gratefully acknowledge the foundational works upon which miqrocal is built:
-
-\[1\] I. Stassen, N. Burtch, A. Talin, P. Falcaro, M. Allendorf, and R. Ameloot,
-"An updated roadmap for the integration of metal–organic frameworks with
-electronic devices and chemical sensors,"
-*Chem. Soc. Rev.* **46**, 3185–3241 (2017).
-https://doi.org/10.1039/C7CS00122C
-
-\[2\] O. Shekhah, J. Liu, R. A. Fischer, and C. Wöll,
-"MOF thin films: existing and future applications,"
-*Chem. Soc. Rev.* **40**, 1081–1106 (2011).
-https://doi.org/10.1039/C0CS00147C
-
-\[3\] A. Zur and T. C. McGill,
-"Lattice match: An application to heteroepitaxy,"
-*J. Appl. Phys.* **55**, 378–386 (1984).
-https://doi.org/10.1063/1.333084
-— *The seminal brute-force supercell enumeration method that miqrocal supersedes.*
-
-\[4\] The Jacobi–Anger expansion  $e^{z\cos\varphi} = \sum_n I_n(z)\,e^{in\varphi}$
-converts the two-dimensional coincidence integral into an efficiently
-evaluable Fourier series; $I_n$ are modified Bessel functions of the first kind.
-
-\[5\] G. N. Watson,
-*A Treatise on the Theory of Bessel Functions*, 2nd ed.,
-Cambridge University Press (1944), §2.22.
-— *Standard reference for Bessel-function identities used in Level 1.*
-
-\[6\] A. K. Lenstra, H. W. Lenstra Jr., and L. Lovász,
-"Factoring polynomials with rational coefficients,"
-*Math. Ann.* **261**, 515–534 (1982).
-https://doi.org/10.1007/BF01457454
-— *The LLL algorithm: guarantees a near-shortest basis in polynomial time.
-  miqrocal uses this to find the optimal integer supercell matrix pair (M, N)
-  without exhaustive enumeration.*
-
-\[7\] J. D. H. Donnay and D. Harker,
-"A new law of crystal morphology extending the law of Bravais,"
-*Am. Mineral.* **22**, 446–467 (1937).
-— *The Donnay–Harker extension of the Bravais–Friedel morphological rule;
-  the basis of the BFDH face-ranking used in `bfdh_faces()` and
-  `best_surface_lattice()`.*
-
-\[8\] S. S.-Y. Chui, S. M.-F. Lo, J. P. H. Charmant, A. G. Orpen, and I. D. Williams,
-"A Chemically Functionalizable Nanoporous Material [Cu₃(TMA)₂(H₂O)₃]ₙ,"
-*Science* **283**, 1148–1150 (1999).
-https://doi.org/10.1126/science.283.5405.1148
-— *First report of HKUST-1 (MOF-199); crystal structure used in
-  `examples/HKUST-1.cif`.*
-
----
-
-## License
-
-MIT License — see [LICENSE](LICENSE).
+\[1\] Shekhah, O. et al. *Chem. Soc. Rev.* **2011**, 40, 1081.  
+\[2\] Falcaro, P. et al. *Nat. Chem.* **2016**, 8, 925.  
+\[3\] Zur, A.; McGill, T. C. *J. Appl. Phys.* **1984**, 55, 378.  
+\[4\] Watson, G. N. *A Treatise on the Theory of Bessel Functions*, 2nd ed., 1944.  
+\[5\] Lenstra, A. K.; Lenstra, H. W.; Lovász, L. *Math. Ann.* **1982**, 261, 515.  
+\[6\] Donnay, J. D. H.; Harker, D. *Am. Mineral.* **1937**, 22, 446.  
+\[7\] Chui, S. S.-Y. et al. *Science* **1999**, 283, 1148.
