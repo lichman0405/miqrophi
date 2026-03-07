@@ -659,3 +659,203 @@ def generate_pdf_report(
         plt.close(fig_card)
 
     return os.path.abspath(save_path)
+
+
+# ---------------------------------------------------------------------------
+# Algorithm animation — coincidence search
+# ---------------------------------------------------------------------------
+
+def animate_coincidence_search(
+    lat_sub: Lattice2D,
+    lat_mof: Lattice2D,
+    *,
+    G_cutoff: float = 8.0,
+    sigma: float = 0.3,
+    n_frames: int = 360,
+    interval: int = 25,
+    save_path: Optional[str] = None,
+    fps: int = 30,
+    dpi: int = 120,
+) -> "matplotlib.animation.FuncAnimation":
+    """
+    Animate the coincidence search: show the MOF reciprocal lattice rotating
+    over the substrate lattice while the Φ(θ) curve is drawn in real time.
+
+    Each frame corresponds to one rotation angle θ stepping from 0° to 360°.
+
+    Left panel  — reciprocal space: substrate points (blue, fixed) and MOF
+                  points (red, rotating).  Point size encodes the
+                  Debye-Waller weight; overlapping pairs flash green.
+    Right panel — Φ(θ) curve accumulated frame-by-frame; detected peaks are
+                  annotated with an orange vertical marker.
+
+    Parameters
+    ----------
+    lat_sub, lat_mof : substrate and MOF ``Lattice2D`` objects
+    G_cutoff         : reciprocal truncation radius (Å⁻¹)
+    sigma            : Gaussian width for coincidence score (Å⁻¹)
+    n_frames         : number of animation frames (= angular resolution)
+    interval         : delay between frames in milliseconds
+    save_path        : if given, save the animation to this path (.gif or .mp4)
+    fps              : frames per second when saving
+    dpi              : resolution when saving
+    """
+    import matplotlib
+    import matplotlib.animation as animation
+    from scipy.signal import find_peaks
+
+    # ── Pre-compute the full Φ(θ) curve (needed for peak detection) ──────
+    from .coincidence import compute as _coincidence_compute
+    full_result = _coincidence_compute(
+        lat_sub, lat_mof,
+        G_cutoff=G_cutoff, sigma=sigma, K=n_frames,
+    )
+    theta_grid = full_result.theta_grid   # (n_frames,) degrees
+    phi_curve  = full_result.phi_curve    # (n_frames,) normalised
+
+    # Peaks on the full curve (for annotation)
+    peak_indices, _ = find_peaks(phi_curve, height=0.15, distance=n_frames // 36)
+    peak_thetas     = theta_grid[peak_indices]
+    peak_phis       = phi_curve[peak_indices]
+
+    # ── Static reciprocal-lattice point sets ─────────────────────────────
+    Gs_all = _recip_points_in_disk(lat_sub.recip_matrix(), G_cutoff)  # (Ns, 2)
+    Gm_all = _recip_points_in_disk(lat_mof.recip_matrix(), G_cutoff)  # (Nm, 2)
+
+    # Debye-Waller sizes for scatter
+    def _dw_sizes(vecs: np.ndarray, base: float = 80.0) -> np.ndarray:
+        norms = np.linalg.norm(vecs, axis=1)
+        return base * np.exp(-2.0 * (norms / G_cutoff) ** 2) + 8.0
+
+    s_sub = _dw_sizes(Gs_all)
+
+    # ── Figure layout ─────────────────────────────────────────────────────
+    matplotlib.use("Agg")
+    fig, (ax_recip, ax_phi) = plt.subplots(
+        1, 2, figsize=(12, 5.5),
+        gridspec_kw={"width_ratios": [1, 1.3]},
+    )
+    fig.patch.set_facecolor("#0d1117")
+    for ax in (ax_recip, ax_phi):
+        ax.set_facecolor("#161b22")
+        for spine in ax.spines.values():
+            spine.set_color("#30363d")
+        ax.tick_params(colors="#8b949e", labelsize=8)
+        ax.xaxis.label.set_color("#8b949e")
+        ax.yaxis.label.set_color("#8b949e")
+
+    # Left panel — reciprocal space
+    lim = G_cutoff * 1.05
+    ax_recip.set_xlim(-lim, lim)
+    ax_recip.set_ylim(-lim, lim)
+    ax_recip.set_aspect("equal")
+    ax_recip.set_xlabel("$G_x$  (Å⁻¹)", fontsize=9)
+    ax_recip.set_ylabel("$G_y$  (Å⁻¹)", fontsize=9)
+    ax_recip.set_title(
+        f"Reciprocal space  ·  {lat_sub.label or 'substrate'} (blue)  +  "
+        f"{lat_mof.label or 'MOF'} (red, rotating)",
+        color="#c9d1d9", fontsize=9, pad=6,
+    )
+    ax_recip.axhline(0, color="#30363d", lw=0.5)
+    ax_recip.axvline(0, color="#30363d", lw=0.5)
+
+    sc_sub = ax_recip.scatter(
+        Gs_all[:, 0], Gs_all[:, 1],
+        s=s_sub, c=_C_SUB, alpha=0.75, zorder=3, label="Substrate",
+    )
+    sc_mof = ax_recip.scatter(
+        Gm_all[:, 0], Gm_all[:, 1],
+        s=_dw_sizes(Gm_all), c=_C_MOF, alpha=0.75, zorder=4, label="MOF",
+    )
+    sc_coin = ax_recip.scatter(
+        [], [], s=120, c=_C_COIN, marker="*", zorder=5, label="Coincident",
+    )
+    ax_recip.legend(
+        loc="upper right", fontsize=7,
+        facecolor="#161b22", edgecolor="#30363d", labelcolor="#c9d1d9",
+    )
+    theta_label = ax_recip.text(
+        0.03, 0.04, "", transform=ax_recip.transAxes,
+        color="#f0e68c", fontsize=10, fontweight="bold",
+    )
+
+    # Right panel — Φ(θ) curve
+    ax_phi.set_xlim(0, 360)
+    ax_phi.set_ylim(-0.05, 1.12)
+    ax_phi.set_xlabel("θ  (degrees)", fontsize=9)
+    ax_phi.set_ylabel("Φ(θ)  (normalised)", fontsize=9)
+    ax_phi.set_title(
+        "Coincidence function  Φ(θ)  —  accumulated in real time",
+        color="#c9d1d9", fontsize=9, pad=6,
+    )
+    ax_phi.axhline(0, color="#30363d", lw=0.5)
+
+    line_phi, = ax_phi.plot([], [], color=_C_PHI, lw=1.5, zorder=3)
+    vline = ax_phi.axvline(x=0, color="#f0e68c", lw=1.0, ls="--", alpha=0.7)
+    peak_markers = []   # will grow as peaks come into view
+
+    fig.tight_layout(pad=2.0)
+
+    # ── Animation update function ──────────────────────────────────────────
+    def _update(frame_idx: int):
+        theta_deg = theta_grid[frame_idx]
+        theta_rad = np.radians(theta_deg)
+
+        # Rotate MOF reciprocal lattice
+        R = np.array([[ np.cos(theta_rad), -np.sin(theta_rad)],
+                      [ np.sin(theta_rad),  np.cos(theta_rad)]])
+        Gm_rot = Gm_all @ R.T
+        sc_mof.set_offsets(Gm_rot)
+        sc_mof.set_sizes(_dw_sizes(Gm_rot))
+
+        # Highlight coincident pairs: |Gs - Gm_rot| < 2*sigma
+        dists = np.linalg.norm(
+            Gs_all[:, None, :] - Gm_rot[None, :, :], axis=2
+        )  # (Ns, Nm)
+        coincident_mask = dists < 2.0 * sigma
+        coin_pts_sub = Gs_all[coincident_mask.any(axis=1)]
+        coin_pts_mof = Gm_rot[coincident_mask.any(axis=0)]
+        coin_all = np.vstack([coin_pts_sub, coin_pts_mof]) if (
+            len(coin_pts_sub) and len(coin_pts_mof)
+        ) else np.empty((0, 2))
+        sc_coin.set_offsets(coin_all if len(coin_all) else np.empty((0, 2)))
+
+        # Theta label
+        theta_label.set_text(f"θ = {theta_deg:.1f}°")
+
+        # Accumulate Φ curve up to current frame
+        line_phi.set_data(theta_grid[:frame_idx + 1], phi_curve[:frame_idx + 1])
+
+        # Moving cursor
+        vline.set_xdata([theta_deg, theta_deg])
+
+        # Add peak markers as they scroll into view
+        for i, (pt, pp) in enumerate(zip(peak_thetas, peak_phis)):
+            if pt <= theta_deg and len(peak_markers) <= i:
+                vl = ax_phi.axvline(x=pt, color=_C_PEAK, lw=1.2, ls=":", alpha=0.9)
+                txt = ax_phi.text(
+                    pt + 2, pp + 0.04,
+                    f"{pt:.1f}°",
+                    color=_C_PEAK, fontsize=7, va="bottom",
+                )
+                peak_markers.append((vl, txt))
+
+        return sc_mof, sc_coin, line_phi, vline, theta_label
+
+    anim = animation.FuncAnimation(
+        fig, _update,
+        frames=n_frames,
+        interval=interval,
+        blit=False,
+    )
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        suffix = os.path.splitext(save_path)[1].lower()
+        if suffix == ".gif":
+            writer = animation.PillowWriter(fps=fps)
+        else:
+            writer = animation.FFMpegWriter(fps=fps, bitrate=1800)
+        anim.save(save_path, writer=writer, dpi=dpi)
+
+    return anim
