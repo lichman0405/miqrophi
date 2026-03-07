@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
@@ -102,7 +101,7 @@ def _lattice_type(cif_text: str) -> str:
     return "P"
 
 
-def _is_allowed(h: int, k: int, l: int, lattice_type: str) -> bool:
+def _is_allowed(h: int, k: int, ell: int, lattice_type: str) -> bool:
     """
     Return True if the reflection (h, k, l) is systematically allowed for
     the given lattice-centering type.
@@ -120,18 +119,18 @@ def _is_allowed(h: int, k: int, l: int, lattice_type: str) -> bool:
     if lt == "P":
         return True
     if lt == "I":
-        return (h + k + l) % 2 == 0
+        return (h + k + ell) % 2 == 0
     if lt == "F":
-        parities = {h % 2, k % 2, l % 2}
+        parities = {h % 2, k % 2, ell % 2}
         return len(parities) == 1          # all same parity
     if lt == "A":
-        return (k + l) % 2 == 0
+        return (k + ell) % 2 == 0
     if lt == "B":
-        return (h + l) % 2 == 0
+        return (h + ell) % 2 == 0
     if lt == "C":
         return (h + k) % 2 == 0
     if lt == "R":
-        return (-h + k + l) % 3 == 0
+        return (-h + k + ell) % 3 == 0
     return True                            # H or unknown: allow all
 
 
@@ -227,37 +226,57 @@ _SG_ZONE_CONDS: dict[int, list[tuple[str, str]]] = {
 }
 
 
-def _in_zone(zone: str, h: int, k: int, l: int) -> bool:
+def _in_zone(zone: str, h: int, k: int, ell: int) -> bool:
     """Return True if (h, k, l) lies in the given special zone."""
-    if zone == "0kl":  return h == 0
-    if zone == "h0l":  return k == 0
-    if zone == "hk0":  return l == 0
-    if zone == "h00":  return k == 0 and l == 0
-    if zone == "0k0":  return h == 0 and l == 0
-    if zone == "00l":  return h == 0 and k == 0
-    if zone == "hhl":  return h == k
-    if zone == "hhh":  return h == k == l
+    if zone == "0kl":
+        return h == 0
+    if zone == "h0l":
+        return k == 0
+    if zone == "hk0":
+        return ell == 0
+    if zone == "h00":
+        return k == 0 and ell == 0
+    if zone == "0k0":
+        return h == 0 and ell == 0
+    if zone == "00l":
+        return h == 0 and k == 0
+    if zone == "hhl":
+        return h == k
+    if zone == "hhh":
+        return h == k == ell
     return False
 
 
-def _rule_ok(rule: str, h: int, k: int, l: int) -> bool:
+def _rule_ok(rule: str, h: int, k: int, ell: int) -> bool:
     """Return True if (h, k, l) satisfies the selection rule (reflection present)."""
-    if rule == "h=2n":    return h % 2 == 0
-    if rule == "k=2n":    return k % 2 == 0
-    if rule == "l=2n":    return l % 2 == 0
-    if rule == "h+k=2n":  return (h + k) % 2 == 0
-    if rule == "h+l=2n":  return (h + l) % 2 == 0
-    if rule == "k+l=2n":  return (k + l) % 2 == 0
-    if rule == "h=4n":    return h % 4 == 0
-    if rule == "k=4n":    return k % 4 == 0
-    if rule == "l=4n":    return l % 4 == 0
-    if rule == "h+k=4n":  return (h + k) % 4 == 0
-    if rule == "h+l=4n":  return (h + l) % 4 == 0
-    if rule == "k+l=4n":  return (k + l) % 4 == 0
+    if rule == "h=2n":
+        return h % 2 == 0
+    if rule == "k=2n":
+        return k % 2 == 0
+    if rule == "l=2n":
+        return ell % 2 == 0
+    if rule == "h+k=2n":
+        return (h + k) % 2 == 0
+    if rule == "h+l=2n":
+        return (h + ell) % 2 == 0
+    if rule == "k+l=2n":
+        return (k + ell) % 2 == 0
+    if rule == "h=4n":
+        return h % 4 == 0
+    if rule == "k=4n":
+        return k % 4 == 0
+    if rule == "l=4n":
+        return ell % 4 == 0
+    if rule == "h+k=4n":
+        return (h + k) % 4 == 0
+    if rule == "h+l=4n":
+        return (h + ell) % 4 == 0
+    if rule == "k+l=4n":
+        return (k + ell) % 4 == 0
     return True   # unknown rule: conservatively allow
 
 
-def _is_zone_allowed(h: int, k: int, l: int, sg_num: int) -> bool:
+def _is_zone_allowed(h: int, k: int, ell: int, sg_num: int) -> bool:
     """
     Return True if (h, k, l) is allowed by the screw-axis and glide-plane
     conditions of the given space-group number.
@@ -271,7 +290,7 @@ def _is_zone_allowed(h: int, k: int, l: int, sg_num: int) -> bool:
     Pm-3m/Fm-3m/Im-3m and similar point-group-mirror-only entries).
     """
     for zone, rule in _SG_ZONE_CONDS.get(sg_num, []):
-        if _in_zone(zone, h, k, l) and not _rule_ok(rule, h, k, l):
+        if _in_zone(zone, h, k, ell) and not _rule_ok(rule, h, k, ell):
             return False
     return True
 

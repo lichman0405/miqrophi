@@ -2,7 +2,7 @@
 import pytest
 from pathlib import Path
 
-from miqrocal.cif_parser import (
+from miqrophi.cif_parser import (
     _is_allowed,
     _lattice_type,
     _is_zone_allowed,

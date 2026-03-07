@@ -29,8 +29,8 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
 from .lattice import Lattice2D
-from .level1 import Level1Result
-from .level2 import MatchResult
+from .coincidence import CoincidenceResult
+from .supercell import MatchResult
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ def _recip_points_in_disk(
 # ---------------------------------------------------------------------------
 
 def plot_phi_curve(
-    l1: Level1Result,
+    l1: CoincidenceResult,
     *,
     ax: Optional[Axes] = None,
     title: str = "Coincidence Function Φ(θ)",
@@ -113,7 +113,7 @@ def plot_phi_curve(
 
     Parameters
     ----------
-    l1    : Level1Result from ``level1.compute()``
+    l1    : CoincidenceResult from ``level1.compute()``
     ax    : existing Axes to draw into; a new figure is created if *None*
     title : panel title
     """
@@ -398,7 +398,7 @@ def plot_strain_ellipse(
 def plot_match_card(
     lat_sub: Lattice2D,
     lat_mof: Lattice2D,
-    l1: Level1Result,
+    l1: CoincidenceResult,
     match: MatchResult,
     *,
     save_path: Optional[str] = None,
@@ -418,7 +418,7 @@ def plot_match_card(
     Parameters
     ----------
     lat_sub, lat_mof : substrate and MOF ``Lattice2D`` objects
-    l1               : ``Level1Result`` for the Φ curve panel
+    l1               : ``CoincidenceResult`` for the Φ curve panel
     match            : ``MatchResult`` to visualise in all four panels
     save_path        : if provided, save the figure here (PNG / SVG / PDF)
     dpi              : pixel density when saving to a raster format
@@ -530,7 +530,7 @@ _PLACEHOLDER = """\
 def generate_pdf_report(
     lat_sub: Lattice2D,
     lat_mof: Lattice2D,
-    l1: Level1Result,
+    l1: CoincidenceResult,
     matches: "list[MatchResult]",
     *,
     title: str = "Epitaxy Matching Report",
@@ -549,7 +549,7 @@ def generate_pdf_report(
     Parameters
     ----------
     lat_sub, lat_mof : substrate and MOF ``Lattice2D`` objects
-    l1               : ``Level1Result`` (used for the Φ(θ) panel on page 2)
+    l1               : ``CoincidenceResult`` (used for the Φ(θ) panel on page 2)
     matches          : list of ``MatchResult`` objects, pre-sorted by η
     title            : report title shown on page 1
     save_path        : output path for the ``.pdf`` file

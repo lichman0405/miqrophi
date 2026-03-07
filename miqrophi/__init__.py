@@ -1,4 +1,3 @@
-__version__: str = "0.3.0"
 """
 miqrocal — 2D epitaxial lattice matching via three-level hierarchical screening.
 
@@ -33,17 +32,19 @@ plot_match_card      : 2x2 combined match-card figure
 generate_pdf_report  : two-page PDF report (text summary + match-card figure)
 """
 
-from .lattice     import Lattice2D, SUBSTRATE_DB
-from .matcher     import EpitaxyMatcher, MatcherConfig
-from .cif_parser  import read_cell, surface_lattice, bfdh_faces, best_surface_lattice
-from .batch       import BatchConfig, batch_run
-from .visualize   import (
-    plot_phi_curve,
+__version__: str = "0.3.0"
+
+from .batch import BatchConfig, batch_run
+from .cif_parser import best_surface_lattice, bfdh_faces, read_cell, surface_lattice
+from .lattice import Lattice2D, SUBSTRATE_DB
+from .matcher import EpitaxyMatcher, MatcherConfig
+from .visualize import (
+    generate_pdf_report,
     plot_lattice_overlay,
     plot_leed_pattern,
-    plot_strain_ellipse,
     plot_match_card,
-    generate_pdf_report,
+    plot_phi_curve,
+    plot_strain_ellipse,
 )
 
 __all__ = [

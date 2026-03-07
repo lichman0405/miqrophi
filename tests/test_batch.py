@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from miqrocal import batch_run, BatchConfig
+from miqrophi import batch_run, BatchConfig
 
 EXAMPLES = Path(__file__).parent.parent / "examples"
 _CIFS = list(EXAMPLES.glob("*.cif"))

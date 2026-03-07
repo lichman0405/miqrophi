@@ -4,7 +4,7 @@ import math
 import numpy as np
 import pytest
 
-from miqrocal.lattice import Lattice2D, SUBSTRATE_DB
+from miqrophi.lattice import Lattice2D, SUBSTRATE_DB
 
 
 class TestLattice2D:

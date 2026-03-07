@@ -1,5 +1,5 @@
 """
-Level 2 — Floating-point LLL lattice reduction and strain tensor.
+Supercell solver — LLL lattice reduction and Green-Lagrange strain tensor.
 
 For each candidate rotation angle theta from Level 1, a 4-D embedding
 lattice is constructed whose shortest vectors correspond to the optimal

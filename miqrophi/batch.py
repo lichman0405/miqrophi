@@ -31,23 +31,25 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import matplotlib
-matplotlib.use("Agg")   # non-interactive; safe to import before plt
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from .lattice import SUBSTRATE_DB
-from .matcher import EpitaxyMatcher, MatcherConfig
+from . import discriminant as _discriminant
+from . import coincidence as _coincidence
+from . import supercell as _supercell
 from .cif_parser import best_surface_lattice, read_cell
-from . import level0 as _level0
-from . import level1 as _level1
-from . import level2 as _level2
-from .visualize import plot_match_card, generate_pdf_report
+from .lattice import SUBSTRATE_DB
+from .matcher import MatcherConfig
+from .visualize import generate_pdf_report, plot_match_card
+
+matplotlib.use("Agg")   # non-interactive; safe to import before plt
 
 _INVALID = re.compile(r'[\\/:*?"<>|\[\]\s]+')
 
@@ -124,15 +126,15 @@ def _run_single_cif(
             }
 
             try:
-                l1_res = _level1.compute(
+                l1_res = _coincidence.compute(
                     lat_sub, lat_mof,
                     G_cutoff=mcfg.G_cutoff,
                     sigma=mcfg.sigma,
                 )
-                all_matches: list[_level2.MatchResult] = []
+                all_matches: list[_supercell.MatchResult] = []
                 for th in l1_res.theta_peaks[: mcfg.top_theta]:
                     all_matches.extend(
-                        _level2.find_matches(
+                        _supercell.find_matches(
                             lat_sub, lat_mof,
                             theta_deg=th,
                             lambda_values=mcfg.lambda_values,
@@ -151,7 +153,7 @@ def _run_single_cif(
                 continue
 
             best = all_matches[0]
-            l0   = _level0.check(lat_sub, lat_mof)
+            l0   = _discriminant.check(lat_sub, lat_mof)
             row.update({
                 "match_found": True,
                 "theta_deg":   round(best.theta_deg, 2),
@@ -203,7 +205,7 @@ def _run_single_cif(
             )
             rows.append(row)
 
-    log(f"  └─ done")
+    log("  └─ done")
     return rows
 
 
@@ -216,9 +218,13 @@ def _worker(args: tuple) -> list[dict]:
     (spawn-based multiprocessing on Windows; fork on Linux/macOS).
     """
     import matplotlib
+
     matplotlib.use("Agg")
     cif_str, subs, cfg, mcfg, run_dir_str = args
-    _noop = lambda *a, **kw: None
+
+    def _noop(*_args, **_kwargs) -> None:
+        return None
+
     return _run_single_cif(cif_str, subs, cfg, mcfg, Path(run_dir_str), _noop)
 
 
@@ -345,9 +351,12 @@ def batch_run(
         else min(cfg.n_jobs, len(paths))
     )
 
-    _log = print if cfg.verbose else (lambda *a, **kw: None)
+    def _silent(*_args, **_kwargs) -> None:
+        return None
+
+    _log: Callable[..., None] = print if cfg.verbose else _silent
     _log(f"\n{'═' * 62}")
-    _log(f"  miqrocal batch_run")
+    _log("  miqrocal batch_run")
     _log(f"  {len(paths)} CIF(s)  ×  {len(subs)} substrate(s)"
          f"  ×  up to {cfg.n_faces} face(s)  =  up to"
          f" {len(paths) * len(subs) * cfg.n_faces} pairs")

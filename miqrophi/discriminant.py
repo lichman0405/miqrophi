@@ -1,5 +1,5 @@
 """
-Level 0 — Quadratic form discriminant check.
+Discriminant — quadratic form symmetry pre-filter.
 
 Determines whether two 2D lattices can be exactly commensurate based on
 the algebraic structure of their associated binary quadratic forms.
@@ -21,7 +21,7 @@ from .lattice import Lattice2D
 
 
 @dataclass(frozen=True)
-class Level0Result:
+class DiscriminantResult:
     """Result of the Level-0 symmetry pre-check."""
 
     feasible:  bool   # True if exact commensurability is algebraically allowed
@@ -70,7 +70,7 @@ def _is_rational_perfect_square(x: float, max_denom: int = 10_000) -> bool:
 # Public API
 # ---------------------------------------------------------------------------
 
-def check(lat_sub: Lattice2D, lat_mof: Lattice2D) -> Level0Result:
+def check(lat_sub: Lattice2D, lat_mof: Lattice2D) -> DiscriminantResult:
     """
     Run the Level-0 symmetry pre-check.
 
@@ -93,6 +93,6 @@ def check(lat_sub: Lattice2D, lat_mof: Lattice2D) -> Level0Result:
         if ok else
         "symmetry-forbidden: discriminant ratio is not a rational perfect square"
     )
-    return Level0Result(
+    return DiscriminantResult(
         feasible=ok, delta_sub=d_s, delta_mof=d_o, ratio=ratio, message=msg
     )

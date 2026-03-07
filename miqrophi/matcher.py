@@ -8,7 +8,7 @@ from typing import Optional
 import pandas as pd
 
 from .lattice import Lattice2D
-from . import level0, level1, level2
+from . import discriminant, coincidence, supercell
 
 
 @dataclass
@@ -62,12 +62,12 @@ class EpitaxyMatcher:
         _log(f"{'─' * 60}")
 
         # ── Level 0 ────────────────────────────────────────────────
-        l0 = level0.check(lat_sub, lat_mof)
+        l0 = discriminant.check(lat_sub, lat_mof)
         _log(f"  [L0] delta_sub={l0.delta_sub:.4f}  delta_mof={l0.delta_mof:.4f}"
              f"  ratio={l0.ratio:.4f}  ->  {l0.message}")
 
         # ── Level 1 ────────────────────────────────────────────────
-        l1 = level1.compute(
+        l1 = coincidence.compute(
             lat_sub, lat_mof,
             G_cutoff=cfg.G_cutoff,
             sigma=cfg.sigma,
@@ -83,9 +83,9 @@ class EpitaxyMatcher:
             return None
 
         # ── Level 2 ────────────────────────────────────────────────
-        all_matches: list[level2.MatchResult] = []
+        all_matches: list[supercell.MatchResult] = []
         for th in l1.theta_peaks[: cfg.top_theta]:
-            matches = level2.find_matches(
+            matches = supercell.find_matches(
                 lat_sub, lat_mof,
                 theta_deg=th,
                 lambda_values=cfg.lambda_values,

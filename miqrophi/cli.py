@@ -96,7 +96,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _resolve_substrates(keys: list[str] | None) -> dict:
-    from miqrocal import SUBSTRATE_DB
+    from miqrophi import SUBSTRATE_DB
     if keys is None:
         return dict(SUBSTRATE_DB)
     missing = [k for k in keys if k not in SUBSTRATE_DB]
@@ -132,7 +132,7 @@ def _print_summary(df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 def _cmd_substrates(_args: argparse.Namespace) -> int:
-    from miqrocal import SUBSTRATE_DB
+    from miqrophi import SUBSTRATE_DB
     print(f"\n{'Key':<20} {'a (Å)':>8} {'b (Å)':>8} {'γ (°)':>8}")
     print("─" * 48)
     for key, lat in SUBSTRATE_DB.items():
@@ -142,7 +142,7 @@ def _cmd_substrates(_args: argparse.Namespace) -> int:
 
 
 def _cmd_run_or_batch(args: argparse.Namespace, glob_or_files) -> int:
-    from miqrocal import BatchConfig, MatcherConfig, batch_run
+    from miqrophi import BatchConfig, MatcherConfig, batch_run
 
     subs    = _resolve_substrates(args.substrates)
     outputs = _parse_outputs(args.outputs)

@@ -1,5 +1,5 @@
 """
-Level 1 — Reciprocal-space coincidence function Phi(theta).
+Coincidence filter — reciprocal-space overlap function Phi(theta).
 
 Constructs the weighted overlap integral between two reciprocal-lattice
 point sets as a function of the rotation angle theta:
@@ -31,7 +31,7 @@ from .lattice import Lattice2D
 
 
 @dataclass
-class Level1Result:
+class CoincidenceResult:
     """Result of the Level-1 coincidence-function computation."""
 
     theta_peaks: list[float]  # peak positions (degrees), sorted by height desc
@@ -84,7 +84,7 @@ def compute(
     n_max:           int   = 12,
     K:               int   = 2000,
     peak_threshold:  float = 0.15,
-) -> Level1Result:
+) -> CoincidenceResult:
     """
     Compute the coincidence function Phi(theta) and return all significant peaks.
 
@@ -138,7 +138,7 @@ def compute(
     theta_peaks  = np.degrees(theta_grid[peaks_idx[order]]).tolist()
     phi_peaks    = Phi_norm[peaks_idx[order]].tolist()
 
-    return Level1Result(
+    return CoincidenceResult(
         theta_peaks=theta_peaks,
         phi_peaks=phi_peaks,
         phi_curve=Phi_norm,
