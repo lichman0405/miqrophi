@@ -19,6 +19,7 @@ from miqrophi import (
     Lattice2D,
     MatcherConfig,
     SUBSTRATE_DB,
+    animate_coincidence_search,
     generate_pdf_report,
     coincidence,
     supercell,
@@ -113,6 +114,19 @@ def _write_outputs(
     )
     print(f"  [png] {png_path}")
     print(f"  [pdf] {saved_pdf}")
+
+    gif_path = output_dir / f"{safe_stem}_animation.gif"
+    animate_coincidence_search(
+        lat_sub, lat_mof,
+        G_cutoff=cfg.G_cutoff,
+        sigma=cfg.sigma,
+        n_frames=360,
+        interval=25,
+        save_path=str(gif_path),
+        fps=30,
+        dpi=100,
+    )
+    print(f"  [gif] {gif_path}")
 
 
 def main() -> None:
