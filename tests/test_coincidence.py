@@ -11,8 +11,10 @@ class TestLevel1Regression:
         result = coincidence.compute(SUBSTRATE_DB["Au_100"], hkust1, G_cutoff=8.0, sigma=0.4)
 
         assert len(result.theta_peaks) >= 5
-        assert math.isclose(result.theta_peaks[0], 270.0, abs_tol=0.2)
-        assert math.isclose(result.theta_peaks[1], 90.0, abs_tol=0.2)
+        # stable lexsort: within equal-phi peaks, ascending theta order
+        # -> 90° (smaller) comes before 270°
+        assert math.isclose(result.theta_peaks[0], 90.0, abs_tol=0.2)
+        assert math.isclose(result.theta_peaks[1], 270.0, abs_tol=0.2)
         # 50.76° and 140.76° are 4-fold-symmetry-equivalent peaks; which one
         # appears at index 3 depends on floating-point tie-breaking in the sort.
         _EQUIV_FAMILY = [50.76, 140.76]
@@ -26,7 +28,9 @@ class TestLevel1Regression:
         result = coincidence.compute(SUBSTRATE_DB["Au_111"], hex_mof, G_cutoff=8.0, sigma=0.4)
 
         assert len(result.theta_peaks) >= 6
-        expected = [90.0, 270.0, 329.94, 149.94, 30.06, 210.06]
+        # stable lexsort: within equal-phi peaks, ascending theta order
+        # -> 90° < 270°; 149.94° < 329.94°; 30.06° < 210.06°
+        expected = [90.0, 270.0, 149.94, 329.94, 30.06, 210.06]
         for got, want in zip(result.theta_peaks[:6], expected):
             assert math.isclose(got, want, abs_tol=0.2)
         assert min(result.phi_peaks[:6]) > 0.9999

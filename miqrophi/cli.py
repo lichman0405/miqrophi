@@ -1,5 +1,5 @@
 """
-miqrocal.cli — Command-line interface for the miqrocal package.
+miqrophi.cli — Command-line interface for the miqrophi package.
 
 Sub-commands
 ------------
@@ -9,9 +9,9 @@ batch        Screen a glob of CIF files against multiple substrates.
 
 Usage
 -----
-    miqrocal substrates
-    miqrocal run FILE.cif [FILE2.cif ...] [options]
-    miqrocal batch "examples/*.cif"  [options]
+    miqrophi substrates
+    miqrophi run FILE.cif [FILE2.cif ...] [options]
+    miqrophi batch "examples/*.cif"  [options]
 
 Common options
 --------------
@@ -40,7 +40,7 @@ import pandas as pd
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="miqrocal",
+        prog="miqrophi",
         description="2D epitaxial lattice matching from CIF files.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -102,8 +102,8 @@ def _resolve_substrates(keys: list[str] | None) -> dict:
     missing = [k for k in keys if k not in SUBSTRATE_DB]
     if missing:
         sys.exit(
-            f"[miqrocal] Unknown substrate key(s): {missing}\n"
-            f"Run  miqrocal substrates  to list valid keys."
+            f"[miqrophi] Unknown substrate key(s): {missing}\n"
+            f"Run  miqrophi substrates  to list valid keys."
         )
     return {k: SUBSTRATE_DB[k] for k in keys}
 
@@ -113,7 +113,7 @@ def _parse_outputs(raw: str) -> set[str]:
     valid = {"csv", "pdf", "png"}
     bad   = parts - valid
     if bad:
-        sys.exit(f"[miqrocal] Unknown output type(s): {bad}; valid: {valid}")
+        sys.exit(f"[miqrophi] Unknown output type(s): {bad}; valid: {valid}")
     return parts
 
 
@@ -172,7 +172,7 @@ def _cmd_run_or_batch(args: argparse.Namespace, glob_or_files) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     """
-    CLI entry point registered as ``miqrocal`` by pyproject.toml.
+    CLI entry point registered as ``miqrophi`` by pyproject.toml.
 
     Returns an integer exit code so it can be tested without calling
     :func:`sys.exit` directly.

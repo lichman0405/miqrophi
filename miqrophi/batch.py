@@ -288,7 +288,7 @@ def batch_run(
 
     For each CIF the BFDH rule selects up to ``config.n_faces`` surfaces,
     which are then matched against every substrate in ``config.substrates``
-    (or the full :data:`~miqrocal.SUBSTRATE_DB` if *None*).
+    (or the full :data:`~miqrophi.SUBSTRATE_DB` if *None*).
 
     Parameters
     ----------

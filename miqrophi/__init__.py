@@ -1,5 +1,5 @@
 """
-miqrocal — 2D epitaxial lattice matching via three-level hierarchical screening.
+miqrophi — 2D epitaxial lattice matching via three-level hierarchical screening.
 
 Public API
 ----------

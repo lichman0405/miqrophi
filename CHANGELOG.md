@@ -7,6 +7,36 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.1] — 2026-03-13
+
+### Changed
+
+- **Package renamed** from `miqrocal` to `miqrophi` throughout: module
+  docstrings, CLI `prog` name, error messages, PDF/HTML footers, and all
+  internal cross-references.  The `[project.scripts]` entry point is now
+  `miqrophi = "miqrophi.cli:main"`.
+- **`coincidence.compute`**: peak-sorting changed from unstable `np.argsort`
+  to stable `np.lexsort` (primary: descending Φ height; secondary: ascending
+  θ).  Eliminates non-deterministic ordering of equal-height peaks across
+  NumPy versions and platforms.
+- **`visualize._real_points_in_box` / `_recip_points_in_disk`**: replaced
+  nested Python loops with NumPy `meshgrid` vectorisation, consistent with
+  the rest of the library.
+
+### Fixed
+
+- `tests/test_matcher.py`: duplicate `TestEpitaxyMatcherVerbose` class removed;
+  the second, weaker copy silently shadowed the first.
+- `tests/test_coincidence.py`: expected peak order updated to match the new
+  deterministic sort (90° < 270°; 149.94° < 329.94°).
+- `miqrophi/coincidence.py`: `_recip_points_cached` now marks returned arrays
+  `writeable = False` to prevent silent cache corruption on accidental mutation.
+- `miqrophi/cif_parser.py`: removed dead code in `_pick_two_shortest` —
+  a 2D cross-product value was computed then unconditionally overwritten by
+  the correct 3D form; now only the 3D form is computed.
+
+---
+
 ## [0.1.0] — 2026-03-06
 
 ### Added

@@ -67,32 +67,3 @@ class TestEpitaxyMatcherVerbose:
         matcher  = EpitaxyMatcher(MatcherConfig(sigma=0.001, eta_tol=0.05, G_cutoff=0.1))
         result   = matcher.run(SUBSTRATE_DB["Au_100"], tiny_mof, verbose=False)
         assert result is None
-
-class TestEpitaxyMatcherVerbose:
-    """Exercises the verbose=True logging paths."""
-
-    def test_verbose_true_prints_output(self, capsys):
-        hkust1  = Lattice2D(18.62, 18.62, 90.0, "HKUST-1")
-        matcher = EpitaxyMatcher(MatcherConfig(sigma=0.4, eta_tol=0.04))
-        df = matcher.run(SUBSTRATE_DB["Au_100"], hkust1, verbose=True)
-        out = capsys.readouterr().out
-        assert "[L1]" in out
-        assert "[L2]" in out
-        assert df is not None
-
-    def test_verbose_no_match_prints_note(self, capsys):
-        """A very tight eta_tol with an unlikely pair should trigger the no-match path."""
-        tiny_mof = Lattice2D(3.0, 3.0, 90.0, "tiny")
-        matcher  = EpitaxyMatcher(MatcherConfig(sigma=0.3, eta_tol=1e-9))
-        result   = matcher.run(SUBSTRATE_DB["Au_100"], tiny_mof, verbose=True)
-        out = capsys.readouterr().out
-        # Either no peaks or no matches — just make sure it doesn't crash
-        assert result is None or True  # graceful exit
-
-    def test_no_peaks_returns_none(self):
-        """A MOF lattice that produces zero L1 peaks should return None."""
-        # Use extremely narrow sigma so Phi has no peaks above threshold
-        tiny_mof = Lattice2D(0.001, 0.001, 90.0)
-        matcher  = EpitaxyMatcher(MatcherConfig(sigma=0.001, eta_tol=0.05, G_cutoff=0.1))
-        result   = matcher.run(SUBSTRATE_DB["Au_100"], tiny_mof, verbose=False)
-        assert result is None

@@ -1,4 +1,4 @@
-"""Demonstration entry point for the miqrocal epitaxy matching pipeline.
+"""Demonstration entry point for the miqrophi epitaxy matching pipeline.
 
 Runs three representative lattice-matching cases, prints the top tabular
 results, and writes PNG/PDF outputs to the ``output/`` directory.
@@ -157,7 +157,7 @@ def main() -> None:
     ]
 
     print("\n" + "-" * 60)
-    print("  miqrocal demo")
+    print("  miqrophi demo")
     for label, lat_sub, lat_mof in cases:
         _print_results(label, lat_sub, lat_mof, matcher)
 

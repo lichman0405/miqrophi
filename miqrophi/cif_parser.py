@@ -392,10 +392,9 @@ def _pick_two_shortest(vecs: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
     """
     v1 = vecs[0]
     for v2 in vecs[1:]:
-        # 2D det via cross product magnitude / (|v1||v2|) — reject near-parallel
-        cross = abs(float(v1[0] * v2[1] - v1[1] * v2[0])) if len(v1) >= 2 else 0.0
-        if len(v1) == 3:
-            cross = float(np.linalg.norm(np.cross(v1, v2)))
+        # Reject near-parallel pairs via 3-D cross-product magnitude.
+        # Vectors from _in_plane_vectors are always 3-D.
+        cross = float(np.linalg.norm(np.cross(v1, v2)))
         if cross > 1e-4 * np.linalg.norm(v1) * np.linalg.norm(v2):
             return v1, v2
     raise ValueError(
@@ -463,7 +462,7 @@ def surface_lattice(
 
     Example
     -------
-    >>> from miqrocal.cif_parser import surface_lattice
+    >>> from miqrophi.cif_parser import surface_lattice
     >>> lat = surface_lattice("examples/HKUST-1.cif", hkl=(0, 0, 1))
     >>> lat
     Lattice2D(a=26.343, b=26.343, gamma_deg=90.0, label='HKUST-1 (001)')

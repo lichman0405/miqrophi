@@ -35,7 +35,7 @@ from .lattice import Lattice2D
 class CoincidenceResult:
     """Result of the Level-1 coincidence-function computation."""
 
-    theta_peaks: list[float]  # peak positions (degrees), sorted by height desc
+    theta_peaks: list[float]  # peak positions (degrees), sorted by Φ desc then θ asc
     phi_peaks:   list[float]  # normalised peak heights in [0, 1]
     phi_curve:   np.ndarray   # full normalised Phi(theta) curve, shape (K,)
     theta_grid:  np.ndarray   # corresponding angles (degrees), shape (K,)
@@ -90,7 +90,10 @@ def _recip_points_cached(
     The returned arrays are read-only and must not be mutated.
     """
     lat = Lattice2D(a, b, gamma_deg)
-    return _recip_points(lat, G_cutoff, max_hk)
+    G_vecs, weights = _recip_points(lat, G_cutoff, max_hk)
+    G_vecs.flags.writeable = False
+    weights.flags.writeable = False
+    return G_vecs, weights
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +184,11 @@ def compute(
         height=peak_threshold,
         distance=K // 36,   # minimum separation ~10 deg
     )
-    order        = np.argsort(Phi_norm[peaks_idx])[::-1]
+    # Sort primarily by descending phi height, secondarily by ascending theta
+    # (stable secondary key) so that equal-phi peaks are always in the same
+    # deterministic order regardless of NumPy version or floating-point jitter.
+    order = np.lexsort((np.degrees(theta_grid[peaks_idx]),
+                        -Phi_norm[peaks_idx]))
     theta_peaks  = np.degrees(theta_grid[peaks_idx[order]]).tolist()
     phi_peaks    = Phi_norm[peaks_idx[order]].tolist()
 
