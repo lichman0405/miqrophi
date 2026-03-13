@@ -187,8 +187,12 @@ def compute(
     # Sort primarily by descending phi height, secondarily by ascending theta
     # (stable secondary key) so that equal-phi peaks are always in the same
     # deterministic order regardless of NumPy version or floating-point jitter.
+    # Round phi to 6 decimal places so symmetry-equivalent peaks (which differ
+    # only by floating-point noise) are treated as having equal height and the
+    # ascending-theta tiebreaker produces a deterministic order.
+    phi_rounded = np.round(Phi_norm[peaks_idx], 6)
     order = np.lexsort((np.degrees(theta_grid[peaks_idx]),
-                        -Phi_norm[peaks_idx]))
+                        -phi_rounded))
     theta_peaks  = np.degrees(theta_grid[peaks_idx[order]]).tolist()
     phi_peaks    = Phi_norm[peaks_idx[order]].tolist()
 

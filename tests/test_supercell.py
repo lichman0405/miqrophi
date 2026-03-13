@@ -10,22 +10,31 @@ class TestLevel2Regression:
         hkust1 = Lattice2D(18.62, 18.62, 90.0, "HKUST-1(010)")
         l1 = coincidence.compute(SUBSTRATE_DB["Au_100"], hkust1, G_cutoff=8.0, sigma=0.4)
 
+        # The secondary peak family for square-on-square has 8-fold equivalents:
+        # 50.76° and its reflection 39.24° (= 90° − 50.76°), plus their 90°-rotations.
+        # Use the first peak in this family rather than a fixed list index, so the
+        # test is robust against platform-dependent phi tie-breaking order.
+        _EQUIV = [39.24, 50.76, 129.24, 140.76]
+        theta = next(
+            t for t in l1.theta_peaks
+            if any(math.isclose(t, ex, abs_tol=0.2) for ex in _EQUIV)
+        )
         matches = supercell.find_matches(
             SUBSTRATE_DB["Au_100"],
             hkust1,
-            theta_deg=l1.theta_peaks[3],
+            theta_deg=theta,
             eta_tol=0.04,
         )
 
         assert len(matches) >= 1
         best = matches[0]
-        # theta_peaks[3] may be either symmetry-equivalent peak (50.76° or 140.76°)
-        _EQUIV = [50.76, 140.76]
         assert any(math.isclose(best.theta_deg, ex, abs_tol=0.2) for ex in _EQUIV)
         assert math.isclose(best.eta, 0.002141, rel_tol=1e-3)
         assert math.isclose(best.area, 5876.2, rel_tol=1e-3)
-        # N (substrate supercell) is orientation-independent
-        assert best.N.tolist() == [[17, 8], [-8, 17]]
+        # The N matrix is orientation-dependent; 39.24° and 50.76° are reflection
+        # equivalents so they yield the two transpose-sign variants of the same cell.
+        _VALID_N = [[[17, 8], [-8, 17]], [[17, -8], [8, 17]]]
+        assert best.N.tolist() in _VALID_N
 
     def test_axis_aligned_peak_gives_small_supercell_solution(self):
         hkust1 = Lattice2D(18.62, 18.62, 90.0, "HKUST-1(010)")

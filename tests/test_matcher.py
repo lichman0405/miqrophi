@@ -15,12 +15,16 @@ class TestEpitaxyMatcherRegression:
         assert df is not None
         assert not df.empty
         row = df.iloc[0]
-        # 50.76° and 140.76° are 4-fold-equivalent; either is correct
+        # 50.76°, 140.76° and their reflection equivalents 39.24°, 129.24° are all
+        # valid for the square-on-square 8-fold-symmetric family.
         assert any(math.isclose(row["theta (deg)"], ex, abs_tol=0.2)
-                   for ex in [50.76, 140.76])
+                   for ex in [39.24, 50.76, 129.24, 140.76])
         assert math.isclose(row["eta"], 0.002141, rel_tol=1e-3)
         assert math.isclose(row["area (A2)"], 5876.2, rel_tol=1e-3)
-        assert row["N"] == [[17, 8], [-8, 17]]
+        # The N matrix is orientation-dependent; 39.24° and 50.76° are reflection
+        # equivalents so they yield the two transpose-sign variants of the same cell.
+        _VALID_N = [[[17, 8], [-8, 17]], [[17, -8], [8, 17]]]
+        assert row["N"] in _VALID_N
         assert bool(row["L0_feasible"]) is True
 
     def test_hkust1_on_au111_returns_approximate_matches_only(self):
