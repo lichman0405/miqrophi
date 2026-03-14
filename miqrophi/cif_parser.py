@@ -24,11 +24,11 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 
 from .lattice import Lattice2D
-
 
 # ---------------------------------------------------------------------------
 # CIF key → value extraction

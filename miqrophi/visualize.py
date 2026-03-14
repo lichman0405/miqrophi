@@ -21,17 +21,19 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
+import numpy as np
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
-from .lattice import Lattice2D
 from .coincidence import CoincidenceResult
+from .lattice import Lattice2D
 from .supercell import MatchResult
 
+if TYPE_CHECKING:
+    from matplotlib.animation import FuncAnimation
 
 # ---------------------------------------------------------------------------
 # Colour palette  (Tableau-10, colour-blind-friendly)
@@ -558,8 +560,9 @@ def generate_pdf_report(
     -------
     Absolute path to the saved PDF file.
     """
-    from matplotlib.backends.backend_pdf import PdfPages
     from datetime import datetime
+
+    from matplotlib.backends.backend_pdf import PdfPages
 
     if not matches:
         raise ValueError("matches list is empty — nothing to report")
@@ -674,7 +677,7 @@ def animate_coincidence_search(  # pragma: no cover
     save_path: Optional[str] = None,
     fps: int = 30,
     dpi: int = 120,
-) -> "matplotlib.animation.FuncAnimation":
+) -> "FuncAnimation":
     """
     Animate the coincidence search: show the MOF reciprocal lattice rotating
     over the substrate lattice while the Φ(θ) curve is drawn in real time.
@@ -757,7 +760,7 @@ def animate_coincidence_search(  # pragma: no cover
     ax_recip.axhline(0, color="#30363d", lw=0.5)
     ax_recip.axvline(0, color="#30363d", lw=0.5)
 
-    sc_sub = ax_recip.scatter(
+    ax_recip.scatter(
         Gs_all[:, 0], Gs_all[:, 1],
         s=s_sub, c=_C_SUB, alpha=0.75, zorder=3, label="Substrate",
     )

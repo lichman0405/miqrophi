@@ -39,13 +39,18 @@ dependencies = [
 fast = [
     "numba>=0.57",   # JIT-compiles the LLL inner loop to near-C speed
 ]
+mcp = [
+    "mcp[cli]>=1.0",  # FastMCP server for AI agent integration
+]
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
+    "mcp[cli]>=1.0",
 ]
 
 [project.scripts]
-miqrophi = "miqrophi.cli:main"
+miqrophi     = "miqrophi.cli:main"
+miqrophi_mcp = "miqrophi.mcp_server:main"
 
 [project.urls]
 Repository    = "https://github.com/lichman0405/miqrophi"
@@ -61,3 +66,4 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+ignore = ["E741"]  # allow 'l' as Miller index variable name (crystallographic convention)

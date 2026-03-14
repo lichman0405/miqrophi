@@ -7,8 +7,8 @@ from typing import Optional
 
 import pandas as pd
 
+from . import coincidence, discriminant, supercell
 from .lattice import Lattice2D
-from . import discriminant, coincidence, supercell
 
 
 @dataclass

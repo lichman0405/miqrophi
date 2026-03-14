@@ -41,8 +41,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from . import discriminant as _discriminant
 from . import coincidence as _coincidence
+from . import discriminant as _discriminant
 from . import supercell as _supercell
 from .cif_parser import best_surface_lattice, read_cell
 from .lattice import SUBSTRATE_DB
