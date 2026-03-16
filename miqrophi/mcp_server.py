@@ -22,7 +22,11 @@ from mcp.server.fastmcp import FastMCP  # noqa: E402
 from . import coincidence, discriminant, supercell  # noqa: E402
 from .cif_parser import best_surface_lattice, read_cell, surface_lattice  # noqa: E402
 from .lattice import SUBSTRATE_DB, Lattice2D  # noqa: E402
-from .visualize import generate_pdf_report, plot_match_card  # noqa: E402
+from .visualize import (  # noqa: E402
+    animate_coincidence_search,
+    generate_pdf_report,
+    plot_match_card,
+)
 
 # ---------------------------------------------------------------------------
 # Server instance
@@ -358,6 +362,82 @@ def analyze_epitaxy(
     if files:
         result["files"] = files
     return result
+
+
+@mcp.tool()
+def generate_coincidence_animation(
+    substrate_name: Optional[str] = None,
+    substrate_a: Optional[float] = None,
+    substrate_b: Optional[float] = None,
+    substrate_gamma_deg: Optional[float] = None,
+    cif_path: Optional[str] = None,
+    cif_content: Optional[str] = None,
+    hkl: Optional[list[int]] = None,
+    overlayer_a: Optional[float] = None,
+    overlayer_b: Optional[float] = None,
+    overlayer_gamma_deg: Optional[float] = None,
+    sigma: float = 0.3,
+    n_frames: int = 360,
+    fps: int = 30,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """
+    Generate a GIF animation of the coincidence lattice search process.
+
+    The animation shows the MOF reciprocal lattice rotating over the
+    substrate reciprocal lattice (left panel), while the coincidence
+    function Phi(theta) is drawn in real time (right panel).
+
+    Substrate and overlayer inputs follow the same convention as
+    analyze_epitaxy.
+
+    Parameters
+    ----------
+    substrate_name      : Built-in substrate key (e.g. 'Au_111', 'Cu_111').
+    substrate_a/b/gamma : Explicit substrate lattice (Angstrom, degrees).
+    cif_path            : Path to overlayer CIF file.
+    cif_content         : Raw CIF text for the overlayer.
+    hkl                 : Miller indices [h,k,l] of the overlayer surface.
+    overlayer_a/b/gamma : Explicit overlayer lattice (Angstrom, degrees).
+    sigma               : Gaussian width for coincidence score (default 0.3).
+    n_frames            : Number of animation frames / angular steps (default 360).
+    fps                 : Frames per second in the output GIF (default 30).
+    output_dir          : Directory to save the GIF. If omitted, a temp dir is used.
+
+    Returns
+    -------
+    dict with gif_path (absolute path to the saved .gif file) and metadata.
+    """
+    lat_sub = _resolve_substrate(
+        substrate_name, substrate_a, substrate_b, substrate_gamma_deg,
+    )
+    lat_mof = _resolve_overlayer(
+        cif_path, cif_content, hkl,
+        overlayer_a, overlayer_b, overlayer_gamma_deg,
+    )
+
+    if output_dir is None:
+        output_dir = tempfile.mkdtemp(prefix="miqrophi_anim_")
+    else:
+        os.makedirs(output_dir, exist_ok=True)
+
+    gif_path = os.path.join(output_dir, "coincidence_search.gif")
+    animate_coincidence_search(
+        lat_sub, lat_mof,
+        sigma=sigma,
+        n_frames=n_frames,
+        save_path=gif_path,
+        fps=fps,
+    )
+    plt.close("all")
+
+    return {
+        "gif_path": os.path.abspath(gif_path),
+        "substrate": _lattice_info(lat_sub),
+        "overlayer": _lattice_info(lat_mof),
+        "n_frames": n_frames,
+        "fps": fps,
+    }
 
 
 # ---------------------------------------------------------------------------
